@@ -1,0 +1,42 @@
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+[Bb]in/
+[Oo]bj/
+
+# NuGet
+*.nupkg
+packages/
+
+# ReSharper
+_ReSharper*/
+*.DotSettings.user
+
+# Rider
+.idea/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# TigerTrade proprietary binaries (keep local only)
+libs/*.dll
+
+# Reverse-engineered/proprietary sources
+/decompiled/
+
+# Local AI/dev tooling
+/.claude/
+/.codex/
+
+# Optional temporary artifacts
+*.tmp
+*~
