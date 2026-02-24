@@ -4,13 +4,17 @@ Thanks for contributing to this repository.
 
 ## Scope
 
-This project is intentionally narrow and currently accepts changes only for:
+This repository is designed for multiple TigerTrade indicators.
+
+Current implemented scope:
 
 - `AkodeLevelsIndicator`
 - `Helpers/CircularBuffer<T>`
 - Build/deploy/docs around that scope
 
-Out of scope for this repository: trend lines indicator, ray objects, Pine Script sources, decompiled/private code.
+New indicator proposals are welcome. Please open an issue first to discuss naming, serialization compatibility, and maintenance expectations.
+
+Still out of scope: Pine Script sources, decompiled/private code, and proprietary binaries.
 
 ## Development Setup
 

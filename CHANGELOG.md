@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Open-source standalone repository for TigerTrade custom indicators.
+- Initial open-source repository structure for TigerTrade custom indicators.
 - `AkodeLevelsIndicator` (pivot-based support/resistance detector).
 - `CircularBuffer<T>` helper dependency.
 - Timeframe aggregation support (Any, Minute, Hour, Week, Month).

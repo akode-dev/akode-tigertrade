@@ -15,7 +15,7 @@ Describe what this PR changes and why.
 - [ ] Build succeeds (`msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any CPU"`)
 - [ ] Manually tested in TigerTrade
 - [ ] Verified on multiple symbols/timeframes
-- [ ] No scope creep beyond Akode Levels + CircularBuffer
+- [ ] Scope is clear (existing indicator changes or explicit new indicator addition)
 
 ## Screenshots / recordings
 
@@ -26,3 +26,4 @@ Attach before/after visuals if behavior changed.
 - [ ] Updated relevant docs (`README`, `CHANGELOG`, etc.)
 - [ ] Preserved backward-compatible serialization names where required
 - [ ] Kept dependencies limited to project scope
+- [ ] If adding a new indicator, included usage docs and manual test notes

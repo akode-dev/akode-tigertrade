@@ -4,14 +4,17 @@
 [![.NET Framework 4.7.2](https://img.shields.io/badge/.NET%20Framework-4.7.2-blue.svg)](https://dotnet.microsoft.com/)
 [![TigerTrade](https://img.shields.io/badge/TigerTrade-6.9%2B-orange.svg)](https://www.tiger.com/terminal)
 
-Open-source TigerTrade custom indicator package containing **AkodeLevelsIndicator** - a pivot-based support/resistance level detector.
+Open-source TigerTrade custom indicators repository.
 
-This repository contains exactly one indicator and one helper dependency:
+The repository is intended to host multiple indicators over time.  
+At the moment, it includes **AkodeLevelsIndicator** - a pivot-based support/resistance level detector.
+
+Current components:
 
 - `AkodeLevelsIndicator.cs`
 - `Helpers/CircularBuffer.cs`
 
-## What It Does
+## Current Indicator
 
 `AkodeLevelsIndicator` detects pivot highs/lows and draws horizontal support and resistance levels.
 It supports aggregation to higher intervals, tracks broken levels, and limits visible active/broken lines independently for highs and lows.

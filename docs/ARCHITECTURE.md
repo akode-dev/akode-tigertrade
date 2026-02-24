@@ -1,6 +1,7 @@
 # Architecture Overview
 
-This repository contains a standalone TigerTrade custom indicator plugin: `AkodeLevelsIndicator`.
+This repository is a TigerTrade custom indicators workspace.
+The current implementation includes `AkodeLevelsIndicator`.
 
 ## TigerTrade Plugin Model
 
@@ -48,12 +49,13 @@ At runtime, TigerTrade loads types decorated with indicator metadata attributes 
 The project references TigerTrade DLLs from `libs/` via `HintPath`.
 DLLs are not stored in git and must exist locally to compile.
 
-## Scope Boundary
+## Current Scope Boundary
 
-This open-source package intentionally includes only:
+Current source set in this release:
 
 - `AkodeLevelsIndicator.cs`
 - `Helpers/CircularBuffer.cs`
 - `Properties/AssemblyInfo.cs`
 
-Out of scope: trend lines indicator, ray object, Pine Script sources, decompiled/private code.
+Future indicators can be added in `src/Akode.TigerTrade.Indicators/`.
+Still out of scope: Pine Script sources, decompiled/private code, and proprietary binaries.
