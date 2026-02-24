@@ -48,7 +48,7 @@ More indicators can be added to this package over time.
 
 | Indicator | Preview |
 | --- | --- |
-| Akode Levels | _Add screenshot to `docs/images/levels-indicator.png`_ |
+| Akode Levels | ![Akode Levels](docs/images/levels-indicator.png) |
 
 ## Requirements
 
@@ -59,26 +59,78 @@ More indicators can be added to this package over time.
 
 ## Quick Start
 
-1. Download a pre-built `Akode.TigerTrade.Indicators.dll` from [Releases](../../releases), or build locally.
-2. Copy TigerTrade DLL dependencies into `libs/`:
+### For Developers (build from source)
+
+1. Copy TigerTrade DLL dependencies into `libs/`:
 
 ```powershell
 .\scripts\setup-libs.ps1
 ```
 
-3. Build:
+2. Build:
 
 ```powershell
 msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any CPU"
 ```
 
-4. Deploy to TigerTrade:
+If `msbuild` is not available in `PATH`, use:
+
+```powershell
+dotnet msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any CPU"
+```
+
+3. Deploy to TigerTrade:
 
 ```powershell
 .\scripts\deploy.ps1
 ```
 
-5. Restart TigerTrade and add **_Akode: Levels** to chart.
+4. Restart TigerTrade and add **_Akode: Levels** to chart.
+
+### Manual Install (pre-built DLL)
+
+1. Download `Akode.TigerTrade.Indicators.dll` from [Releases](../../releases).
+2. Copy the DLL to:
+
+```text
+%USERPROFILE%\Documents\TigerTrade\Indicators\
+```
+
+3. Restart TigerTrade and add **_Akode: Levels** to chart.
+
+## Releasing on GitHub
+
+`libs/*.dll` are proprietary TigerTrade dependencies and are ignored by git.
+They stay local and are used only to compile.
+
+Recommended release flow:
+
+1. Prepare local dependencies:
+
+```powershell
+.\scripts\setup-libs.ps1
+```
+
+2. Build Release:
+
+```powershell
+msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any CPU"
+```
+
+Or:
+
+```powershell
+dotnet msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any CPU"
+```
+
+3. Publish only the built plugin DLL from:
+
+`src/Akode.TigerTrade.Indicators/bin/Release/Akode.TigerTrade.Indicators.dll`
+
+4. Create Git tag and GitHub Release, then upload this DLL as a release asset.
+
+If you later automate releases via CI, use a self-hosted runner with local TigerTrade DLLs.
+Do not upload proprietary TigerTrade DLLs to the repository or release assets.
 
 ## Project Structure
 
