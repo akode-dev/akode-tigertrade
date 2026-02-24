@@ -169,4 +169,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, coding standard
 
 MIT License. See [LICENSE](LICENSE).
 
-TigerTrade is a trademark/product of Tiger Brokers. This repository is independent and not affiliated with Tiger Brokers.
+Tiger Trade is a product of Tiger Trade Capital AG. This repository is independent and not affiliated with Tiger Trade Capital AG.
