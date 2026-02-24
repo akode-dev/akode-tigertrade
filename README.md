@@ -6,15 +6,11 @@
 
 Open-source TigerTrade custom indicators repository.
 
-The repository is intended to host multiple indicators over time.  
-At the moment, it includes **AkodeLevelsIndicator** - a pivot-based support/resistance level detector.
+This package is designed as a collection of indicators and will expand over time.
 
-Current components:
+## Included Indicators
 
-- `AkodeLevelsIndicator.cs`
-- `Helpers/CircularBuffer.cs`
-
-## Current Indicator
+- **Akode Levels** (`AkodeLevelsIndicator`) - pivot-based support/resistance level detector.
 
 `AkodeLevelsIndicator` detects pivot highs/lows and draws horizontal support and resistance levels.
 It supports aggregation to higher intervals, tracks broken levels, and limits visible active/broken lines independently for highs and lows.
@@ -93,8 +89,8 @@ msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any CPU"
 |- src/
 |  \- Akode.TigerTrade.Indicators/
 |     |- AkodeLevelsIndicator.cs
-|     |- Helpers/CircularBuffer.cs
-|     |- Properties/AssemblyInfo.cs
+|     |- Helpers/
+|     |- Properties/
 |     \- Akode.TigerTrade.Indicators.csproj
 |- Akode.TigerTrade.slnx
 |- CHANGELOG.md

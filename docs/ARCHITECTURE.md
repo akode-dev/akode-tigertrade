@@ -1,7 +1,7 @@
 # Architecture Overview
 
 This repository is a TigerTrade custom indicators workspace.
-The current implementation includes `AkodeLevelsIndicator`.
+The package includes `AkodeLevelsIndicator` and is intended to include more indicators over time.
 
 ## TigerTrade Plugin Model
 
@@ -11,12 +11,10 @@ TigerTrade discovers custom indicators from compiled .NET Framework assemblies c
 
 At runtime, TigerTrade loads types decorated with indicator metadata attributes and exposes them in the UI.
 
-## Main Components
+## Included Indicator
 
 - `AkodeLevelsIndicator`:
   Pivot-based support/resistance detector with optional broken-level rendering.
-- `CircularBuffer<T>`:
-  Small FIFO utility used to keep selected level sets in bounded memory.
 
 ## Key Namespaces Used
 
@@ -49,13 +47,11 @@ At runtime, TigerTrade loads types decorated with indicator metadata attributes 
 The project references TigerTrade DLLs from `libs/` via `HintPath`.
 DLLs are not stored in git and must exist locally to compile.
 
-## Current Scope Boundary
+## Included Sources
 
-Current source set in this release:
+Included indicator source:
 
 - `AkodeLevelsIndicator.cs`
-- `Helpers/CircularBuffer.cs`
-- `Properties/AssemblyInfo.cs`
 
 Future indicators can be added in `src/Akode.TigerTrade.Indicators/`.
-Still out of scope: Pine Script sources, decompiled/private code, and proprietary binaries.
+Still out of scope: decompiled/private code and proprietary binaries.

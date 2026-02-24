@@ -6,15 +6,13 @@ Thanks for contributing to this repository.
 
 This repository is designed for multiple TigerTrade indicators.
 
-Current implemented scope:
+Implemented indicator in this package:
 
 - `AkodeLevelsIndicator`
-- `Helpers/CircularBuffer<T>`
-- Build/deploy/docs around that scope
 
 New indicator proposals are welcome. Please open an issue first to discuss naming, serialization compatibility, and maintenance expectations.
 
-Still out of scope: Pine Script sources, decompiled/private code, and proprietary binaries.
+Still out of scope: decompiled/private code and proprietary binaries.
 
 ## Development Setup
 
