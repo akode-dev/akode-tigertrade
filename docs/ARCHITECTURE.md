@@ -1,57 +1,62 @@
 # Architecture Overview
 
-This repository is a TigerTrade custom indicators workspace.
-The package includes `AkodeLevelsIndicator` and is intended to include more indicators over time.
+This repository is an open-source package of custom indicators for TigerTrade.
+It is designed to host multiple indicators over time under one .NET assembly.
 
-## TigerTrade Plugin Model
+## Goals
 
-TigerTrade discovers custom indicators from compiled .NET Framework assemblies copied into:
+- Keep indicator implementations isolated and easy to extend.
+- Keep build and deployment simple for local development.
+- Avoid shipping proprietary TigerTrade binaries in source control.
+
+## Plugin Architecture (TigerTrade)
+
+TigerTrade loads custom indicator assemblies from:
 
 `%USERPROFILE%\Documents\TigerTrade\Indicators\`
 
-At runtime, TigerTrade loads types decorated with indicator metadata attributes and exposes them in the UI.
+An indicator becomes discoverable when its type is annotated with TigerTrade metadata attributes (for example, `Indicator` + `DataContract`) and compiled into the plugin DLL.
 
-## Included Indicator
+## Repository Structure
 
-- `AkodeLevelsIndicator`:
-  Pivot-based support/resistance detector with optional broken-level rendering.
+- `src/Akode.TigerTrade.Indicators/`
+  Core C# project containing indicator implementations.
+- `scripts/`
+  Local automation for dependency setup, deployment, and release flow.
+- `libs/`
+  Local-only TigerTrade SDK/runtime dependencies used at compile time.
+- `docs/`
+  Architecture and project-level documentation.
 
-## Key Namespaces Used
+## Runtime Model (Generic)
 
-- `TigerTrade.Chart.Base`
-- `TigerTrade.Chart.Indicators.Common`
-- `TigerTrade.Chart.Indicators.Drawings`
-- `TigerTrade.Core.Utils.Time`
-- `TigerTrade.Dx`
-
-## Indicator Lifecycle
+Each indicator follows the same high-level execution model:
 
 1. TigerTrade loads plugin DLLs on startup.
-2. Indicator metadata (`[Indicator]`, `[DataContract]`) registers the indicator.
-3. User adds **_Akode: Levels** to a chart.
-4. On data updates (`Calculation = OnBarClose`), `Execute()` recomputes levels.
-5. Indicator emits line series into `Series` for chart rendering.
-6. Settings changes trigger recalculation via `OnPropertyChanged()`.
+2. User adds an indicator to a chart.
+3. Indicator reads chart data through TigerTrade APIs.
+4. Indicator computes derived series in `Execute()`.
+5. Indicator publishes renderable series/objects back to TigerTrade.
+6. Property changes trigger recalculation via the platform lifecycle.
 
-## Data Flow
+## Extension Model
 
-1. Read raw OHLC arrays from `Helper` (`Date`, `High`, `Low`).
-2. Optionally aggregate bars to selected timeframe (`BuildOnTimeframe`).
-3. Detect pivot highs/lows using `CandlesBefore`/`CandlesAfter` windows.
-4. Mark levels as broken when subsequent prices breach pivot value.
-5. Keep visible levels constrained by max-unbroken/max-broken limits.
-6. Render line series from pivot start index to latest bar.
+When adding a new indicator:
 
-## Build-Time Dependency Model
+1. Add a new indicator class in `src/Akode.TigerTrade.Indicators/`.
+2. Register metadata attributes required by TigerTrade.
+3. Expose user-configurable properties with stable serialization names.
+4. Render output through indicator series/drawing primitives.
+5. Document usage/settings in `README.md`.
+
+Indicator-specific behavior (logic, settings, formulas) belongs in `README.md`, not in this architecture document.
+
+## Build Dependency Model
 
 The project references TigerTrade DLLs from `libs/` via `HintPath`.
-DLLs are not stored in git and must exist locally to compile.
+These DLLs are proprietary, local-only, and excluded from git.
 
-## Included Sources
+## Scope Notes
 
-Included indicator source:
-
-- `AkodeLevelsIndicator.cs`
-
-Future indicators can be added in `src/Akode.TigerTrade.Indicators/`.
-Still out of scope: decompiled/private code and proprietary binaries.
+- In scope: custom indicator source code, scripts, docs, and release assets for this package.
+- Out of scope: decompiled/private code and proprietary TigerTrade DLL redistribution.
