@@ -8,20 +8,16 @@ Open-source TigerTrade custom indicators repository.
 
 This package is designed as a collection of indicators and will expand over time.
 
-## Included Indicators
+## Indicators
 
-- **Akode Levels** (`AkodeLevelsIndicator`) - pivot-based support/resistance level detector.
+### Akode Levels (`AkodeLevelsIndicator`)
 
-`AkodeLevelsIndicator` detects pivot highs/lows and draws horizontal support and resistance levels.
+Pivot-based support/resistance level detector.
+
+It detects pivot highs/lows and draws horizontal support and resistance levels.
 It supports aggregation to higher intervals, tracks broken levels, and limits visible active/broken lines independently for highs and lows.
 
-## Screenshots
-
-| Indicator | Preview |
-| --- | --- |
-| Akode Levels | _Add screenshot to `docs/images/levels-indicator.png`_ |
-
-## Features
+#### Features
 
 - Pivot-based support/resistance detection from chart highs and lows.
 - Optional timeframe aggregation: Any, Minute, Hour, Week, Month.
@@ -29,6 +25,30 @@ It supports aggregation to higher intervals, tracks broken levels, and limits vi
 - Independent limits for visible high and low levels.
 - Optional rendering of broken levels with dotted style.
 - Theme/template integration through TigerTrade indicator APIs.
+
+#### Settings
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| Interval | Any Time Frame | Aggregation interval for pivot detection. |
+| Value | 1 | Multiplier for selected interval. |
+| Candles before | 2 | Bars to the left required for pivot confirmation. |
+| Candles after | 2 | Bars to the right required for pivot confirmation. |
+| Max High lines to show | 15 | Max active resistance levels displayed. |
+| Max Low lines to show | 15 | Max active support levels displayed. |
+| Show broken lines | true | Show levels that were breached by price. |
+| Max High lines (broken) | 2 | Max broken resistance levels displayed. |
+| Max Low lines (broken) | 2 | Max broken support levels displayed. |
+| High levels | Green line | Style/color for resistance levels. |
+| Low levels | Red line | Style/color for support levels. |
+
+More indicators can be added to this package over time.
+
+## Screenshots
+
+| Indicator | Preview |
+| --- | --- |
+| Akode Levels | _Add screenshot to `docs/images/levels-indicator.png`_ |
 
 ## Requirements
 
@@ -59,22 +79,6 @@ msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any CPU"
 ```
 
 5. Restart TigerTrade and add **_Akode: Levels** to chart.
-
-## Configuration
-
-| Parameter | Default | Description |
-| --- | --- | --- |
-| Interval | Any Time Frame | Aggregation interval for pivot detection. |
-| Value | 1 | Multiplier for selected interval. |
-| Candles before | 2 | Bars to the left required for pivot confirmation. |
-| Candles after | 2 | Bars to the right required for pivot confirmation. |
-| Max High lines to show | 15 | Max active resistance levels displayed. |
-| Max Low lines to show | 15 | Max active support levels displayed. |
-| Show broken lines | true | Show levels that were breached by price. |
-| Max High lines (broken) | 2 | Max broken resistance levels displayed. |
-| Max Low lines (broken) | 2 | Max broken support levels displayed. |
-| High levels | Green line | Style/color for resistance levels. |
-| Low levels | Red line | Style/color for support levels. |
 
 ## Project Structure
 
