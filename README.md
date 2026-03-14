@@ -42,6 +42,37 @@ It supports aggregation to higher intervals, tracks broken levels, and limits vi
 | High levels | Green line | Style/color for resistance levels. |
 | Low levels | Red line | Style/color for support levels. |
 
+### Akode Trends (`AkodeTrendsIndicator`)
+
+Multi-profile support/resistance and trendline overlay.
+
+It combines up to five independent level-detection profiles inside one indicator,
+then builds shared upper/lower trend rays from the combined visible support and resistance levels.
+
+#### Features
+
+- Up to 5 independent internal profiles in one indicator instance.
+- Per-profile timeframe, pivot sensitivity, body/wick mode, limits, broken-level handling, and display styles.
+- Horizontal levels rendered separately per profile.
+- Combined upper and lower trend rays built from all visible levels.
+- Independent slope filters for upper and lower trendlines.
+- Theme/template integration through TigerTrade indicator APIs.
+
+#### Settings
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| Profile 1 | enabled | First internal levels profile. |
+| Profile 2-5 | disabled | Additional internal levels profiles. |
+| Show trend lines | true | Toggle shared trendline rendering. |
+| Max High trend lines | 3 | Max upper trend rays displayed. |
+| Max Low trend lines | 3 | Max lower trend rays displayed. |
+| Tolerance in ticks | 2 | Touch tolerance used when scoring trendlines. |
+| Min High touches | 2 | Minimum touches required for upper trendlines. |
+| Min Low touches | 2 | Minimum touches required for lower trendlines. |
+| High: only down slope | true | Restrict upper trendlines to descending slope. |
+| Low: only up slope | true | Restrict lower trendlines to ascending slope. |
+
 More indicators can be added to this package over time.
 
 ## Screenshots
@@ -49,6 +80,7 @@ More indicators can be added to this package over time.
 | Indicator | Preview |
 | --- | --- |
 | Akode Levels | ![Akode Levels](docs/images/levels-indicator.png) |
+| Akode Trends | Screenshot TBD |
 
 ## Requirements
 
@@ -85,7 +117,7 @@ dotnet msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any C
 .\scripts\deploy.ps1
 ```
 
-4. Restart TigerTrade and add **_Akode: Levels** to chart.
+4. Restart TigerTrade and add **_Akode: Levels** or **_Akode: Trends** to chart.
 
 ### Manual Install (pre-built DLL)
 
@@ -96,7 +128,7 @@ dotnet msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any C
 %USERPROFILE%\Documents\TigerTrade\Indicators\
 ```
 
-3. Restart TigerTrade and add **_Akode: Levels** to chart.
+3. Restart TigerTrade and add **_Akode: Levels** or **_Akode: Trends** to chart.
 
 ## Releasing on GitHub
 
@@ -144,6 +176,8 @@ Do not upload proprietary TigerTrade DLLs to the repository or release assets.
 |- scripts/
 |- src/
 |  \- Akode.TigerTrade.Indicators/
+|     |- AkodeTrendsIndicator.cs
+|     |- AkodeTrendsProfileSettings.cs
 |     |- AkodeLevelsIndicator.cs
 |     |- Helpers/
 |     |- Properties/
