@@ -55,7 +55,10 @@ then builds shared upper/lower trend rays from the combined visible support and 
 - Per-profile timeframe, pivot sensitivity, body/wick mode, limits, broken-level handling, and display styles.
 - Horizontal levels rendered separately per profile.
 - Combined upper and lower trend rays built from all visible levels.
+- Multiple selectable trendline ranking modes: classic touches, nearest price, higher timeframe, hybrid clean, outer envelope, consensus, and weighted regression.
 - Independent slope filters for upper and lower trendlines.
+- Configurable cleanup for old support/resistance crossings.
+- Optional hiding of trendlines already broken by candle bodies.
 - Theme/template integration through TigerTrade indicator APIs.
 
 #### Settings
@@ -74,6 +77,11 @@ then builds shared upper/lower trend rays from the combined visible support and 
 | Right padding bars | 20 | Extend trendlines into the empty chart area to the right. |
 | High: only down slope | true | Restrict upper trendlines to descending slope. |
 | Low: only up slope | true | Restrict lower trendlines to ascending slope. |
+| Trendline algorithm | Classic Touches | Select the ranking/cleanup mode for trendline candidates. |
+| Allowed past crossing bars | 5 | Allow upper/lower intersections only within the last N bars to the left of the current bar. |
+| Hide broken trend lines | true | Hide trendlines already broken by candle bodies. |
+| Break bars | 2 | Total number of body-break bars after the first anchor point required to hide a trendline. |
+| Break tolerance in ticks | 2 | Extra tolerance beyond the trendline before a body-break counts. |
 
 More indicators can be added to this package over time.
 

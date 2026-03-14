@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shared upper/lower trendline rendering from combined visible support and resistance levels.
 - Per-profile candle body mode for pivot detection in the new trends indicator.
 - Configurable left/right padding bars for trendline overhang.
+- Selectable trendline algorithms with price/timeframe-aware ranking and same-side cleanup.
+- Configurable filtering of old support/resistance crossings for trendline pairs.
+- Additional trendline modes: outer envelope, consensus, and weighted regression.
+- Body-based hiding of already broken trendlines with configurable bar count and tolerance.
+- `Break bars` now counts total body-break bars after the first anchor point instead of only consecutive breaks after the second point.
 
 ## [1.0.0] - 2026-02-24
 

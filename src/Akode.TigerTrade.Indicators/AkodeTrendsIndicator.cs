@@ -6,6 +6,7 @@ using TigerTrade.Chart.Base;
 using TigerTrade.Chart.Indicators.Common;
 using TigerTrade.Chart.Indicators.Drawings;
 using TigerTrade.Chart.Indicators.Enums;
+using TigerTrade.Core.UI.Converters;
 using TigerTrade.Dx;
 using TigerTrade.Dx.Enums;
 
@@ -33,6 +34,11 @@ namespace Akode.TigerTrade.Indicators
         private int _trendlineRightPaddingBars = 20;
         private bool _highSlopeFilterEnabled = true;
         private bool _lowSlopeFilterEnabled = true;
+        private AkodeTrendlineAlgorithm _trendlineAlgorithm = AkodeTrendlineAlgorithm.ClassicTouches;
+        private int _allowedPastCrossingBars = 5;
+        private bool _hideBrokenTrendLines = true;
+        private int _trendlineBreakBars = 2;
+        private int _trendlineBreakToleranceTicks = 2;
         private ChartLine _highTrendSeries;
         private ChartLine _lowTrendSeries;
 
@@ -301,6 +307,97 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
+        [DataMember(Name = "TrendlineAlgorithm")]
+        [Category("Trend lines"), DisplayName("Trendline algorithm")]
+        public AkodeTrendlineAlgorithm TrendlineAlgorithm
+        {
+            get { return _trendlineAlgorithm; }
+            set
+            {
+                if (value == _trendlineAlgorithm)
+                {
+                    return;
+                }
+
+                _trendlineAlgorithm = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "AllowedPastCrossingBars")]
+        [Category("Trend lines"), DisplayName("Allowed past crossing bars")]
+        public int AllowedPastCrossingBars
+        {
+            get { return _allowedPastCrossingBars; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _allowedPastCrossingBars)
+                {
+                    return;
+                }
+
+                _allowedPastCrossingBars = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "HideBrokenTrendLines")]
+        [Category("Trend lines"), DisplayName("Hide broken trend lines")]
+        public bool HideBrokenTrendLines
+        {
+            get { return _hideBrokenTrendLines; }
+            set
+            {
+                if (value == _hideBrokenTrendLines)
+                {
+                    return;
+                }
+
+                _hideBrokenTrendLines = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "TrendlineBreakBars")]
+        [Category("Trend lines"), DisplayName("Break bars")]
+        public int TrendlineBreakBars
+        {
+            get { return _trendlineBreakBars; }
+            set
+            {
+                value = Math.Max(1, value);
+
+                if (value == _trendlineBreakBars)
+                {
+                    return;
+                }
+
+                _trendlineBreakBars = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "TrendlineBreakToleranceTicks")]
+        [Category("Trend lines"), DisplayName("Break tolerance in ticks")]
+        public int TrendlineBreakToleranceTicks
+        {
+            get { return _trendlineBreakToleranceTicks; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _trendlineBreakToleranceTicks)
+                {
+                    return;
+                }
+
+                _trendlineBreakToleranceTicks = value;
+                OnPropertyChanged();
+            }
+        }
+
         [DataMember(Name = "HighTrendSeries")]
         [Category("Trend display"), DisplayName("High trends")]
         public ChartLine HighTrendSeries
@@ -385,6 +482,11 @@ namespace Akode.TigerTrade.Indicators
             TrendlineRightPaddingBars = source.TrendlineRightPaddingBars;
             HighSlopeFilterEnabled = source.HighSlopeFilterEnabled;
             LowSlopeFilterEnabled = source.LowSlopeFilterEnabled;
+            TrendlineAlgorithm = source.TrendlineAlgorithm;
+            AllowedPastCrossingBars = source.AllowedPastCrossingBars;
+            HideBrokenTrendLines = source.HideBrokenTrendLines;
+            TrendlineBreakBars = source.TrendlineBreakBars;
+            TrendlineBreakToleranceTicks = source.TrendlineBreakToleranceTicks;
 
             HighTrendSeries.CopyTheme(source.HighTrendSeries);
             LowTrendSeries.CopyTheme(source.LowTrendSeries);
@@ -403,11 +505,11 @@ namespace Akode.TigerTrade.Indicators
             var highLevels = new List<TrendsCalculationEngine.LevelLine>();
             var lowLevels = new List<TrendsCalculationEngine.LevelLine>();
 
-            RenderProfile(Profile1, dataLength, highLevels, lowLevels);
-            RenderProfile(Profile2, dataLength, highLevels, lowLevels);
-            RenderProfile(Profile3, dataLength, highLevels, lowLevels);
-            RenderProfile(Profile4, dataLength, highLevels, lowLevels);
-            RenderProfile(Profile5, dataLength, highLevels, lowLevels);
+            RenderProfile(Profile1, 1, dataLength, highLevels, lowLevels);
+            RenderProfile(Profile2, 2, dataLength, highLevels, lowLevels);
+            RenderProfile(Profile3, 3, dataLength, highLevels, lowLevels);
+            RenderProfile(Profile4, 4, dataLength, highLevels, lowLevels);
+            RenderProfile(Profile5, 5, dataLength, highLevels, lowLevels);
 
             if (!ShowTrendLines)
             {
@@ -417,28 +519,41 @@ namespace Akode.TigerTrade.Indicators
             var tolerance = DataProvider != null
                 ? Math.Max(0, TrendlineToleranceTicks) * DataProvider.Step
                 : 0.0;
+            var currentPrice = Helper.Close[dataLength - 1];
+            var priceStep = DataProvider != null ? DataProvider.Step : 0.0;
+            var breakTolerance = DataProvider != null
+                ? Math.Max(0, TrendlineBreakToleranceTicks) * DataProvider.Step
+                : 0.0;
+            var bodyHigh = BuildBodyHigh(Helper.Open, Helper.Close);
+            var bodyLow = BuildBodyLow(Helper.Open, Helper.Close);
+            var selection = TrendsCalculationEngine.SelectTrendLines(
+                highLevels,
+                lowLevels,
+                TrendlineAlgorithm,
+                HighSlopeFilterEnabled,
+                LowSlopeFilterEnabled,
+                MaxHighTrendLines,
+                MaxLowTrendLines,
+                MinHighTrendlineTouches,
+                MinLowTrendlineTouches,
+                tolerance,
+                dataLength,
+                currentPrice,
+                priceStep,
+                AllowedPastCrossingBars,
+                HideBrokenTrendLines,
+                TrendlineBreakBars,
+                breakTolerance,
+                bodyHigh,
+                bodyLow);
 
             DrawTrendLines(
-                TrendsCalculationEngine.SelectTrendLines(
-                    highLevels,
-                    true,
-                    HighSlopeFilterEnabled,
-                    MaxHighTrendLines,
-                    MinHighTrendlineTouches,
-                    tolerance,
-                    dataLength),
+                selection.HighTrendLines,
                 HighTrendSeries,
                 dataLength);
 
             DrawTrendLines(
-                TrendsCalculationEngine.SelectTrendLines(
-                    lowLevels,
-                    false,
-                    LowSlopeFilterEnabled,
-                    MaxLowTrendLines,
-                    MinLowTrendlineTouches,
-                    tolerance,
-                    dataLength),
+                selection.LowTrendLines,
                 LowTrendSeries,
                 dataLength);
         }
@@ -543,6 +658,7 @@ namespace Akode.TigerTrade.Indicators
 
         private void RenderProfile(
             AkodeTrendsProfileSettings profile,
+            int profileIndex,
             int dataLength,
             List<TrendsCalculationEngine.LevelLine> visibleHighLevels,
             List<TrendsCalculationEngine.LevelLine> visibleLowLevels)
@@ -552,7 +668,7 @@ namespace Akode.TigerTrade.Indicators
                 return;
             }
 
-            var result = TrendsCalculationEngine.CalculateLevels(Helper, DataProvider, profile);
+            var result = TrendsCalculationEngine.CalculateLevels(Helper, DataProvider, profile, profileIndex);
 
             DrawHorizontalLines(result.HighLevels, profile.HighSeries, dataLength);
             DrawHorizontalLines(result.LowLevels, profile.LowSeries, dataLength);
@@ -620,6 +736,30 @@ namespace Akode.TigerTrade.Indicators
             return data;
         }
 
+        private static double[] BuildBodyHigh(double[] open, double[] close)
+        {
+            var values = new double[open.Length];
+
+            for (int i = 0; i < open.Length; i++)
+            {
+                values[i] = Math.Max(open[i], close[i]);
+            }
+
+            return values;
+        }
+
+        private static double[] BuildBodyLow(double[] open, double[] close)
+        {
+            var values = new double[open.Length];
+
+            for (int i = 0; i < open.Length; i++)
+            {
+                values[i] = Math.Min(open[i], close[i]);
+            }
+
+            return values;
+        }
+
         private static ChartLine CloneLine(ChartLine source, XDashStyle style)
         {
             return new ChartLine
@@ -631,5 +771,28 @@ namespace Akode.TigerTrade.Indicators
                 Style = style
             };
         }
+    }
+
+    [TypeConverter(typeof(EnumDescriptionTypeConverter))]
+    [DataContract(
+        Name = "AkodeTrendlineAlgorithm",
+        Namespace = "http://schemas.datacontract.org/2004/07/TigerTrade.Chart.Indicators.Custom"
+    )]
+    public enum AkodeTrendlineAlgorithm
+    {
+        [EnumMember(Value = "ClassicTouches"), Description("Classic Touches")]
+        ClassicTouches,
+        [EnumMember(Value = "NearestPrice"), Description("Nearest Price")]
+        NearestPrice,
+        [EnumMember(Value = "HigherTimeFrame"), Description("Higher Time Frame")]
+        HigherTimeFrame,
+        [EnumMember(Value = "HybridClean"), Description("Hybrid Clean")]
+        HybridClean,
+        [EnumMember(Value = "OuterEnvelope"), Description("Outer Envelope")]
+        OuterEnvelope,
+        [EnumMember(Value = "Consensus"), Description("Consensus")]
+        Consensus,
+        [EnumMember(Value = "WeightedRegression"), Description("Weighted Regression")]
+        WeightedRegression
     }
 }
