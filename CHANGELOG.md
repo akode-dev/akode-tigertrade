@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AkodeTrendsIndicator` with 5 independent internal levels profiles.
 - Shared upper/lower trendline rendering from combined visible support and resistance levels.
 - Per-profile candle body mode for pivot detection in the new trends indicator.
+- Configurable left/right padding bars for trendline overhang.
 
 ## [1.0.0] - 2026-02-24
 

@@ -29,6 +29,8 @@ namespace Akode.TigerTrade.Indicators
         private int _trendlineToleranceTicks = 2;
         private int _minHighTrendlineTouches = 2;
         private int _minLowTrendlineTouches = 2;
+        private int _trendlineLeftPaddingBars = 3;
+        private int _trendlineRightPaddingBars = 20;
         private bool _highSlopeFilterEnabled = true;
         private bool _lowSlopeFilterEnabled = true;
         private ChartLine _highTrendSeries;
@@ -227,6 +229,44 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
+        [DataMember(Name = "TrendlineLeftPaddingBars")]
+        [Category("Trend lines"), DisplayName("Left padding bars")]
+        public int TrendlineLeftPaddingBars
+        {
+            get { return _trendlineLeftPaddingBars; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _trendlineLeftPaddingBars)
+                {
+                    return;
+                }
+
+                _trendlineLeftPaddingBars = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "TrendlineRightPaddingBars")]
+        [Category("Trend lines"), DisplayName("Right padding bars")]
+        public int TrendlineRightPaddingBars
+        {
+            get { return _trendlineRightPaddingBars; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _trendlineRightPaddingBars)
+                {
+                    return;
+                }
+
+                _trendlineRightPaddingBars = value;
+                OnPropertyChanged();
+            }
+        }
+
         [DataMember(Name = "HighSlopeFilterEnabled")]
         [Category("Trend lines"), DisplayName("High: only down slope")]
         public bool HighSlopeFilterEnabled
@@ -341,6 +381,8 @@ namespace Akode.TigerTrade.Indicators
             TrendlineToleranceTicks = source.TrendlineToleranceTicks;
             MinHighTrendlineTouches = source.MinHighTrendlineTouches;
             MinLowTrendlineTouches = source.MinLowTrendlineTouches;
+            TrendlineLeftPaddingBars = source.TrendlineLeftPaddingBars;
+            TrendlineRightPaddingBars = source.TrendlineRightPaddingBars;
             HighSlopeFilterEnabled = source.HighSlopeFilterEnabled;
             LowSlopeFilterEnabled = source.LowSlopeFilterEnabled;
 
@@ -546,13 +588,16 @@ namespace Akode.TigerTrade.Indicators
         {
             foreach (var line in lines)
             {
-                var data = CreateSeriesData(dataLength, line.StartIndex, index => line.GetValue(index));
+                var startIndex = Math.Max(0, line.StartIndex - TrendlineLeftPaddingBars);
+                var seriesLength = dataLength + TrendlineRightPaddingBars;
+                var data = CreateSeriesData(seriesLength, startIndex, index => line.GetValue(index));
 
                 Series.Add(new IndicatorSeriesData(data, CloneLine(baseStyle, baseStyle.Style))
                 {
                     Style =
                     {
-                        DisableMinMax = true
+                        DisableMinMax = true,
+                        StraightLine = true
                     }
                 });
             }

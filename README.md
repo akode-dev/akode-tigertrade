@@ -70,6 +70,8 @@ then builds shared upper/lower trend rays from the combined visible support and 
 | Tolerance in ticks | 2 | Touch tolerance used when scoring trendlines. |
 | Min High touches | 2 | Minimum touches required for upper trendlines. |
 | Min Low touches | 2 | Minimum touches required for lower trendlines. |
+| Left padding bars | 3 | Extend trendlines a few bars to the left of the first touch. |
+| Right padding bars | 20 | Extend trendlines into the empty chart area to the right. |
 | High: only down slope | true | Restrict upper trendlines to descending slope. |
 | Low: only up slope | true | Restrict lower trendlines to ascending slope. |
 
