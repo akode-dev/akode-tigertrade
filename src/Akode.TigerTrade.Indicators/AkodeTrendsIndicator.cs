@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Globalization;
 using System.Runtime.Serialization;
 using TigerTrade.Chart.Base;
 using TigerTrade.Chart.Indicators.Common;
@@ -315,8 +314,6 @@ namespace Akode.TigerTrade.Indicators
             get { return _trendlineAlgorithm; }
             set
             {
-                value = NormalizeTrendlineAlgorithm(value);
-
                 if (value == _trendlineAlgorithm)
                 {
                     return;
@@ -442,7 +439,6 @@ namespace Akode.TigerTrade.Indicators
         {
             InitializeProfiles();
             InitializeTrendStyles();
-            _trendlineAlgorithm = NormalizeTrendlineAlgorithm(_trendlineAlgorithm);
         }
 
         public override void ApplyColors(IChartTheme theme)
@@ -775,84 +771,9 @@ namespace Akode.TigerTrade.Indicators
                 Style = style
             };
         }
-
-        private static AkodeTrendlineAlgorithm NormalizeTrendlineAlgorithm(AkodeTrendlineAlgorithm value)
-        {
-            return value == AkodeTrendlineAlgorithm.WeightedRegression
-                ? AkodeTrendlineAlgorithm.WeightedRegression
-                : AkodeTrendlineAlgorithm.ClassicTouches;
-        }
     }
 
-    public sealed class SupportedTrendlineAlgorithmTypeConverter : EnumConverter
-    {
-        private static readonly AkodeTrendlineAlgorithm[] SupportedAlgorithms =
-            new[]
-            {
-                AkodeTrendlineAlgorithm.ClassicTouches,
-                AkodeTrendlineAlgorithm.WeightedRegression
-            };
-
-        public SupportedTrendlineAlgorithmTypeConverter()
-            : base(typeof(AkodeTrendlineAlgorithm))
-        {
-        }
-
-        public override bool GetStandardValuesSupported(ITypeDescriptorContext context)
-        {
-            return true;
-        }
-
-        public override bool GetStandardValuesExclusive(ITypeDescriptorContext context)
-        {
-            return true;
-        }
-
-        public override TypeConverter.StandardValuesCollection GetStandardValues(ITypeDescriptorContext context)
-        {
-            return new TypeConverter.StandardValuesCollection(SupportedAlgorithms);
-        }
-
-        public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
-        {
-            if (destinationType == typeof(string) && value is AkodeTrendlineAlgorithm algorithm)
-            {
-                return GetDescription(algorithm);
-            }
-
-            return base.ConvertTo(context, culture, value, destinationType);
-        }
-
-        public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
-        {
-            var text = value as string;
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                foreach (var algorithm in SupportedAlgorithms)
-                {
-                    if (string.Equals(text, GetDescription(algorithm), StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(text, algorithm.ToString(), StringComparison.OrdinalIgnoreCase))
-                    {
-                        return algorithm;
-                    }
-                }
-            }
-
-            return base.ConvertFrom(context, culture, value);
-        }
-
-        private static string GetDescription(AkodeTrendlineAlgorithm algorithm)
-        {
-            var field = typeof(AkodeTrendlineAlgorithm).GetField(algorithm.ToString());
-            var attribute = field == null
-                ? null
-                : (DescriptionAttribute)Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute));
-
-            return attribute == null ? algorithm.ToString() : attribute.Description;
-        }
-    }
-
-    [TypeConverter(typeof(SupportedTrendlineAlgorithmTypeConverter))]
+    [TypeConverter(typeof(EnumDescriptionTypeConverter))]
     [DataContract(
         Name = "AkodeTrendlineAlgorithm",
         Namespace = "http://schemas.datacontract.org/2004/07/TigerTrade.Chart.Indicators.Custom"
@@ -862,17 +783,6 @@ namespace Akode.TigerTrade.Indicators
         [EnumMember(Value = "ClassicTouches"), Description("Classic Touches")]
         ClassicTouches,
         [EnumMember(Value = "WeightedRegression"), Description("Weighted Regression")]
-        WeightedRegression,
-        // Legacy values are kept for template compatibility and normalized to ClassicTouches.
-        [EnumMember(Value = "NearestPrice"), Description("Nearest Price")]
-        NearestPrice,
-        [EnumMember(Value = "HigherTimeFrame"), Description("Higher Time Frame")]
-        HigherTimeFrame,
-        [EnumMember(Value = "HybridClean"), Description("Hybrid Clean")]
-        HybridClean,
-        [EnumMember(Value = "OuterEnvelope"), Description("Outer Envelope")]
-        OuterEnvelope,
-        [EnumMember(Value = "Consensus"), Description("Consensus")]
-        Consensus
+        WeightedRegression
     }
 }
