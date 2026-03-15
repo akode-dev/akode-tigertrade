@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.Serialization;
+using System.Windows;
 using TigerTrade.Chart.Base;
 using TigerTrade.Chart.Indicators.Common;
 using TigerTrade.Chart.Indicators.Drawings;
@@ -19,40 +20,67 @@ namespace Akode.TigerTrade.Indicators
     [Indicator("X_AkodeTrendsIndicator", "_Akode: Trends", true, Type = typeof(AkodeTrendsIndicator))]
     public sealed class AkodeTrendsIndicator : IndicatorBase
     {
+        private const int MaxDistancePercentLabelsPerSide = 10;
+        private const double DistancePercentLabelPadding = 6.0;
+        private const double DistancePercentLabelLineGap = 4.0;
+        private const double DistancePercentLabelSpacing = 2.0;
+
+        private struct VisibleHorizontalLevel
+        {
+            public double Price;
+            public int StartIndex;
+            public bool IsHigh;
+            public XColor Color;
+            public bool ShowScaleLabel;
+        }
+
+        private struct DistanceLabelCandidate
+        {
+            public VisibleHorizontalLevel Level;
+            public double Distance;
+        }
+
         private AkodeTrendsProfileSettings _profile1;
         private AkodeTrendsProfileSettings _profile2;
         private AkodeTrendsProfileSettings _profile3;
         private AkodeTrendsProfileSettings _profile4;
         private AkodeTrendsProfileSettings _profile5;
         private bool _showTrendLines = true;
-        private int _maxHighTrendLines = 3;
-        private int _maxLowTrendLines = 3;
-        private int _trendlineToleranceTicks = 2;
+        private int _maxHighTrendLines = 4;
+        private int _maxLowTrendLines = 4;
+        private int _trendlineToleranceTicks = 100;
         private int _minHighTrendlineTouches = 2;
         private int _minLowTrendlineTouches = 2;
-        private int _trendlineLeftPaddingBars = 3;
-        private int _trendlineRightPaddingBars = 20;
+        private int _trendlineLeftPaddingBars = 50;
+        private int _trendlineRightPaddingBars = 500;
         private bool _highSlopeFilterEnabled = true;
         private bool _lowSlopeFilterEnabled = true;
-        private AkodeTrendlineAlgorithm _trendlineAlgorithm = AkodeTrendlineAlgorithm.ClassicTouches;
+        private AkodeTrendlineAlgorithm _trendlineAlgorithm = AkodeTrendlineAlgorithm.Ransac;
         private int _allowedPastCrossingBars = 5;
         private bool _hideBrokenTrendLines = true;
-        private int _trendlineBreakBars = 2;
-        private int _trendlineBreakToleranceTicks = 2;
+        private int _trendlineBreakBars = 5;
+        private int _trendlineBreakToleranceTicks = 5;
         private ChartLine _highTrendSeries;
         private ChartLine _lowTrendSeries;
-        private int _maxTotalHighLevels;
-        private int _maxTotalLowLevels;
+        private int _maxTotalHighLevels = 7;
+        private int _maxTotalLowLevels = 7;
         private int _levelTimeFilterMinutes;
-        private int _levelMergeDistanceTicks;
+        private int _levelMergeDistanceTicks = 50;
         private bool _applyLevelFiltersToTrendlines = true;
         private int _trendlineMemoryBars;
         private int _trendlineMemoryMinutes;
-        private int _trendlineMergeTicks;
+        private int _trendlineMergeTicks = 100;
         private TrendsCalculationEngine.TrendSelectionResult _cachedTrendSelection;
         private int _cachedAtDataLength;
         private DateTime _cachedAtTime;
         private double _cachedFirstBarPrice;
+        private bool _showDistancePercentLabels = true;
+        private bool _showBaseLine;
+        private int _baseLineToleranceTicks = 10;
+        private int _baseLineLookbackBars;
+        private int _baseLineLookbackMinutes = 120;
+        private ChartLine _baseLineSeries;
+        private List<VisibleHorizontalLevel> _visibleHorizontalLevels;
 
         [Browsable(false)]
         public override IndicatorCalculation Calculation
@@ -224,6 +252,23 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 _applyLevelFiltersToTrendlines = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ShowDistancePercentLabels")]
+        [Category("Level lines"), DisplayName("Show distance % labels")]
+        public bool ShowDistancePercentLabels
+        {
+            get { return _showDistancePercentLabels; }
+            set
+            {
+                if (value == _showDistancePercentLabels)
+                {
+                    return;
+                }
+
+                _showDistancePercentLabels = value;
                 OnPropertyChanged();
             }
         }
@@ -419,6 +464,8 @@ namespace Akode.TigerTrade.Indicators
             get { return _trendlineAlgorithm; }
             set
             {
+                value = NormalizeTrendlineAlgorithm(value);
+
                 if (value == _trendlineAlgorithm)
                 {
                     return;
@@ -592,10 +639,110 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
+        [DataMember(Name = "ShowBaseLine")]
+        [Category("Base line"), DisplayName("Show base line")]
+        public bool ShowBaseLine
+        {
+            get { return _showBaseLine; }
+            set
+            {
+                if (value == _showBaseLine)
+                {
+                    return;
+                }
+
+                _showBaseLine = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "BaseLineToleranceTicks")]
+        [Category("Base line"), DisplayName("Tolerance (ticks)")]
+        public int BaseLineToleranceTicks
+        {
+            get { return _baseLineToleranceTicks; }
+            set
+            {
+                value = Math.Max(1, value);
+
+                if (value == _baseLineToleranceTicks)
+                {
+                    return;
+                }
+
+                _baseLineToleranceTicks = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "BaseLineLookbackBars")]
+        [Category("Base line"), DisplayName("Lookback (bars)")]
+        public int BaseLineLookbackBars
+        {
+            get { return _baseLineLookbackBars; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _baseLineLookbackBars)
+                {
+                    return;
+                }
+
+                _baseLineLookbackBars = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "BaseLineLookbackMinutes")]
+        [Category("Base line"), DisplayName("Lookback (minutes)")]
+        public int BaseLineLookbackMinutes
+        {
+            get { return _baseLineLookbackMinutes; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _baseLineLookbackMinutes)
+                {
+                    return;
+                }
+
+                _baseLineLookbackMinutes = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "BaseLineSeries")]
+        [Category("Base line"), DisplayName("Base line style")]
+        public ChartLine BaseLineSeries
+        {
+            get
+            {
+                EnsureBaseLineSeries();
+                return _baseLineSeries;
+            }
+            set
+            {
+                if (_baseLineSeries != null)
+                {
+                    _baseLineSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                }
+
+                _baseLineSeries = value ?? CreateDefaultBaseLineSeries();
+                _baseLineSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                _baseLineSeries.PropertyChanged += HandleNestedSettingsChanged;
+
+                OnPropertyChanged();
+            }
+        }
+
         public AkodeTrendsIndicator()
         {
             InitializeProfiles();
             InitializeTrendStyles();
+            EnsureBaseLineSeries();
+            EnsureVisibleHorizontalLevels();
         }
 
         [OnDeserialized]
@@ -603,25 +750,24 @@ namespace Akode.TigerTrade.Indicators
         {
             InitializeProfiles();
             InitializeTrendStyles();
+            EnsureBaseLineSeries();
+            EnsureVisibleHorizontalLevels();
         }
 
         public override void ApplyColors(IChartTheme theme)
         {
             InitializeProfiles();
             InitializeTrendStyles();
+            EnsureBaseLineSeries();
 
-            Profile1.HighSeries.Color = theme.GetNextColor();
-            Profile1.LowSeries.Color = theme.GetNextColor();
-            Profile2.HighSeries.Color = theme.GetNextColor();
-            Profile2.LowSeries.Color = theme.GetNextColor();
-            Profile3.HighSeries.Color = theme.GetNextColor();
-            Profile3.LowSeries.Color = theme.GetNextColor();
-            Profile4.HighSeries.Color = theme.GetNextColor();
-            Profile4.LowSeries.Color = theme.GetNextColor();
-            Profile5.HighSeries.Color = theme.GetNextColor();
-            Profile5.LowSeries.Color = theme.GetNextColor();
-            HighTrendSeries.Color = theme.GetNextColor();
-            LowTrendSeries.Color = theme.GetNextColor();
+            Profile1.ApplyDisplayDefaults(1);
+            Profile2.ApplyDisplayDefaults(2);
+            Profile3.ApplyDisplayDefaults(3);
+            Profile4.ApplyDisplayDefaults(4);
+            Profile5.ApplyDisplayDefaults(5);
+            HighTrendSeries.CopyTheme(CreateDefaultTrendSeries(true));
+            LowTrendSeries.CopyTheme(CreateDefaultTrendSeries(false));
+            BaseLineSeries.CopyTheme(CreateDefaultBaseLineSeries());
 
             base.ApplyColors(theme);
         }
@@ -641,6 +787,7 @@ namespace Akode.TigerTrade.Indicators
             LevelTimeFilterMinutes = source.LevelTimeFilterMinutes;
             LevelMergeDistanceTicks = source.LevelMergeDistanceTicks;
             ApplyLevelFiltersToTrendlines = source.ApplyLevelFiltersToTrendlines;
+            ShowDistancePercentLabels = source.ShowDistancePercentLabels;
 
             ShowTrendLines = source.ShowTrendLines;
             MaxHighTrendLines = source.MaxHighTrendLines;
@@ -661,8 +808,14 @@ namespace Akode.TigerTrade.Indicators
             TrendlineMemoryMinutes = source.TrendlineMemoryMinutes;
             TrendlineMergeTicks = source.TrendlineMergeTicks;
 
+            ShowBaseLine = source.ShowBaseLine;
+            BaseLineToleranceTicks = source.BaseLineToleranceTicks;
+            BaseLineLookbackBars = source.BaseLineLookbackBars;
+            BaseLineLookbackMinutes = source.BaseLineLookbackMinutes;
+
             HighTrendSeries.CopyTheme(source.HighTrendSeries);
             LowTrendSeries.CopyTheme(source.LowTrendSeries);
+            BaseLineSeries.CopyTheme(source.BaseLineSeries);
 
             base.CopyTemplate(indicator, style);
         }
@@ -670,6 +823,9 @@ namespace Akode.TigerTrade.Indicators
         protected override void Execute()
         {
             var dataLength = Helper.Count;
+            EnsureVisibleHorizontalLevels();
+            _visibleHorizontalLevels.Clear();
+
             if (dataLength == 0)
             {
                 return;
@@ -691,6 +847,24 @@ namespace Akode.TigerTrade.Indicators
 
             DrawFilteredHorizontalLines(filteredHigh, true, dataLength);
             DrawFilteredHorizontalLines(filteredLow, false, dataLength);
+
+            if (_showBaseLine && priceStep > 0.0)
+            {
+                var rawPivots = CollectAllRawPivots();
+                var baseLineTolerance = Math.Max(1, _baseLineToleranceTicks) * priceStep;
+                var lookbackStart = ComputeLookbackStart(dataLength);
+                var baseLinePrice = FindBaseLinePrice(rawPivots, baseLineTolerance, dataLength, lookbackStart);
+
+                if (!double.IsNaN(baseLinePrice))
+                {
+                    EnsureBaseLineSeries();
+                    var data = CreateSeriesData(dataLength, 0, delegate { return baseLinePrice; });
+                    Series.Add(new IndicatorSeriesData(data, CloneLine(_baseLineSeries, _baseLineSeries.Style))
+                    {
+                        Style = { DisableMinMax = true }
+                    });
+                }
+            }
 
             if (!ShowTrendLines)
             {
@@ -715,6 +889,46 @@ namespace Akode.TigerTrade.Indicators
                 selection.LowTrendLines,
                 LowTrendSeries,
                 dataLength);
+        }
+
+        public override void GetLabels(ref List<IndicatorLabelInfo> labels)
+        {
+            EnsureVisibleHorizontalLevels();
+
+            if (!ShowIndicatorLabels || _visibleHorizontalLevels.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _visibleHorizontalLevels.Count; i++)
+            {
+                var level = _visibleHorizontalLevels[i];
+                if (!level.ShowScaleLabel || !IsLevelInViewport(level.Price))
+                {
+                    continue;
+                }
+
+                labels.Add(new IndicatorLabelInfo(level.Price, level.Color));
+            }
+        }
+
+        public override void Render(DxVisualQueue visual)
+        {
+            EnsureVisibleHorizontalLevels();
+
+            if (!ShowDistancePercentLabels || _visibleHorizontalLevels.Count == 0 || Canvas == null)
+            {
+                return;
+            }
+
+            var currentPrice = GetCurrentReferencePrice();
+            if (double.IsNaN(currentPrice) || double.IsInfinity(currentPrice) || Math.Abs(currentPrice) < double.Epsilon)
+            {
+                return;
+            }
+
+            DrawDistancePercentLabels(visual, currentPrice, true);
+            DrawDistancePercentLabels(visual, currentPrice, false);
         }
 
         private TrendsCalculationEngine.TrendSelectionResult GetOrComputeTrendSelection(
@@ -816,9 +1030,9 @@ namespace Akode.TigerTrade.Indicators
         private void InitializeProfiles()
         {
             InitializeProfile(ref _profile1, 1, true);
-            InitializeProfile(ref _profile2, 2, false);
-            InitializeProfile(ref _profile3, 3, false);
-            InitializeProfile(ref _profile4, 4, false);
+            InitializeProfile(ref _profile2, 2, true);
+            InitializeProfile(ref _profile3, 3, true);
+            InitializeProfile(ref _profile4, 4, true);
             InitializeProfile(ref _profile5, 5, false);
         }
 
@@ -829,8 +1043,7 @@ namespace Akode.TigerTrade.Indicators
         {
             if (profile == null)
             {
-                profile = new AkodeTrendsProfileSettings();
-                profile.Enabled = enabledByDefault;
+                profile = CreateDefaultProfile(profileIndex, enabledByDefault);
             }
 
             profile.EnsureInitialized(profileIndex);
@@ -849,12 +1062,7 @@ namespace Akode.TigerTrade.Indicators
                 field.PropertyChanged -= HandleNestedSettingsChanged;
             }
 
-            field = value ?? new AkodeTrendsProfileSettings();
-
-            if (value == null)
-            {
-                field.Enabled = enabledByDefault;
-            }
+            field = value ?? CreateDefaultProfile(profileIndex, enabledByDefault);
 
             field.EnsureInitialized(profileIndex);
             field.PropertyChanged -= HandleNestedSettingsChanged;
@@ -901,14 +1109,180 @@ namespace Akode.TigerTrade.Indicators
                 Style = XDashStyle.Solid,
                 Width = 2,
                 Color = isHigh
-                    ? XColor.FromArgb(180, 66, 66, 66)
-                    : XColor.FromArgb(180, 99, 99, 99)
+                    ? XColor.FromArgb(100, 0, 100, 0)
+                    : XColor.FromArgb(100, 148, 0, 211)
             };
+        }
+
+        private static ChartLine CreateDefaultBaseLineSeries()
+        {
+            return new ChartLine
+            {
+                Style = XDashStyle.Solid,
+                Width = 3,
+                Color = XColor.FromArgb(94, 139, 69, 19)
+            };
+        }
+
+        private void EnsureBaseLineSeries()
+        {
+            if (_baseLineSeries == null)
+            {
+                _baseLineSeries = CreateDefaultBaseLineSeries();
+            }
+
+            _baseLineSeries.PropertyChanged -= HandleNestedSettingsChanged;
+            _baseLineSeries.PropertyChanged += HandleNestedSettingsChanged;
+        }
+
+        private void EnsureVisibleHorizontalLevels()
+        {
+            if (_visibleHorizontalLevels == null)
+            {
+                _visibleHorizontalLevels = new List<VisibleHorizontalLevel>();
+            }
         }
 
         private void HandleNestedSettingsChanged(object sender, PropertyChangedEventArgs e)
         {
             OnPropertyChanged(string.Empty);
+        }
+
+
+        private List<TrendsCalculationEngine.LevelLine> CollectAllRawPivots()
+        {
+            var all = new List<TrendsCalculationEngine.LevelLine>();
+            CollectRawPivotsFromProfile(Profile1, 1, all);
+            CollectRawPivotsFromProfile(Profile2, 2, all);
+            CollectRawPivotsFromProfile(Profile3, 3, all);
+            CollectRawPivotsFromProfile(Profile4, 4, all);
+            CollectRawPivotsFromProfile(Profile5, 5, all);
+            return all;
+        }
+
+        private void CollectRawPivotsFromProfile(
+            AkodeTrendsProfileSettings profile,
+            int profileIndex,
+            List<TrendsCalculationEngine.LevelLine> target)
+        {
+            if (profile == null || !profile.Enabled)
+            {
+                return;
+            }
+
+            target.AddRange(TrendsCalculationEngine.CalculateAllRawPivots(
+                Helper, DataProvider, profile, profileIndex));
+        }
+
+        private int ComputeLookbackStart(int dataLength)
+        {
+            var startBar = 0;
+
+            if (_baseLineLookbackBars > 0)
+            {
+                startBar = Math.Max(startBar, dataLength - _baseLineLookbackBars);
+            }
+
+            if (_baseLineLookbackMinutes > 0 && dataLength > 0)
+            {
+                var date = Helper.Date;
+                var cutoff = DateTime.FromOADate(date[dataLength - 1]).AddMinutes(-_baseLineLookbackMinutes);
+
+                for (int i = dataLength - 1; i >= 0; i--)
+                {
+                    if (DateTime.FromOADate(date[i]) < cutoff)
+                    {
+                        startBar = Math.Max(startBar, i + 1);
+                        break;
+                    }
+                }
+            }
+
+            return Math.Min(startBar, dataLength - 1);
+        }
+
+        private double FindBaseLinePrice(
+            List<TrendsCalculationEngine.LevelLine> pivots,
+            double tolerance,
+            int dataLength,
+            int lookbackStart)
+        {
+            if (pivots.Count == 0 || dataLength == 0)
+            {
+                return double.NaN;
+            }
+
+            if (lookbackStart > 0)
+            {
+                pivots.RemoveAll(p => p.StartIndex < lookbackStart);
+            }
+
+            if (pivots.Count == 0)
+            {
+                return double.NaN;
+            }
+
+            pivots.Sort((a, b) => a.Price.CompareTo(b.Price));
+
+            var bestScore = -1;
+            var bestPrice = double.NaN;
+            var high = Helper.High;
+            var low = Helper.Low;
+            var close = Helper.Close;
+            var scanStart = Math.Max(0, lookbackStart);
+
+            var groupStart = 0;
+
+            while (groupStart < pivots.Count)
+            {
+                var anchor = pivots[groupStart].Price;
+                var groupEnd = groupStart + 1;
+
+                while (groupEnd < pivots.Count && pivots[groupEnd].Price - anchor <= tolerance)
+                {
+                    groupEnd++;
+                }
+
+                var pivotCount = groupEnd - groupStart;
+
+                var priceSum = 0.0;
+                for (int i = groupStart; i < groupEnd; i++)
+                {
+                    priceSum += pivots[i].Price;
+                }
+
+                var groupPrice = priceSum / pivotCount;
+
+                var bounceCount = 0;
+                for (int bar = scanStart; bar < dataLength - 1; bar++)
+                {
+                    var touchesHigh = Math.Abs(high[bar] - groupPrice) <= tolerance;
+                    var touchesLow = Math.Abs(low[bar] - groupPrice) <= tolerance;
+
+                    if (touchesHigh || touchesLow)
+                    {
+                        var nextClose = close[bar + 1];
+                        var movedAway = Math.Abs(nextClose - groupPrice) > tolerance;
+
+                        if (movedAway)
+                        {
+                            bounceCount++;
+                        }
+                    }
+                }
+
+                var score = pivotCount + bounceCount;
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestPrice = groupPrice;
+                }
+
+                groupStart = groupEnd;
+            }
+
+            return bestPrice;
         }
 
         private void CollectProfileLevels(
@@ -985,6 +1359,8 @@ namespace Akode.TigerTrade.Indicators
             bool isHigh,
             int dataLength)
         {
+            var seriesLength = GetHorizontalSeriesLength(dataLength);
+
             foreach (var level in levels)
             {
                 var style = GetProfileStyle(level.ProfileIndex, isHigh);
@@ -993,8 +1369,20 @@ namespace Akode.TigerTrade.Indicators
                     continue;
                 }
 
-                var data = CreateSeriesData(dataLength, level.StartIndex, delegate { return level.Price; });
+                var data = CreateSeriesData(seriesLength, level.StartIndex, delegate { return level.Price; });
                 var lineStyle = CloneLine(style, level.IsBroken ? XDashStyle.Dot : style.Style);
+
+                if (lineStyle.Visible)
+                {
+                    _visibleHorizontalLevels.Add(new VisibleHorizontalLevel
+                    {
+                        Price = level.Price,
+                        StartIndex = level.StartIndex,
+                        IsHigh = isHigh,
+                        Color = lineStyle.Color,
+                        ShowScaleLabel = true
+                    });
+                }
 
                 Series.Add(new IndicatorSeriesData(data, lineStyle)
                 {
@@ -1004,6 +1392,234 @@ namespace Akode.TigerTrade.Indicators
                     }
                 });
             }
+        }
+
+        private int GetHorizontalSeriesLength(int dataLength)
+        {
+            var afterBars = Canvas != null ? Math.Max(0, Canvas.AfterBars) : 0;
+            return dataLength + afterBars;
+        }
+
+        private void DrawDistancePercentLabels(
+            DxVisualQueue visual,
+            double currentPrice,
+            bool highSide)
+        {
+            var candidates = new List<DistanceLabelCandidate>();
+
+            for (int i = 0; i < _visibleHorizontalLevels.Count; i++)
+            {
+                var level = _visibleHorizontalLevels[i];
+                if (level.IsHigh != highSide || !IsLevelInViewport(level.Price))
+                {
+                    continue;
+                }
+
+                var distance = level.Price - currentPrice;
+                if (highSide)
+                {
+                    if (distance <= 0.0)
+                    {
+                        continue;
+                    }
+                }
+                else if (distance >= 0.0)
+                {
+                    continue;
+                }
+
+                candidates.Add(new DistanceLabelCandidate
+                {
+                    Level = level,
+                    Distance = Math.Abs(distance)
+                });
+            }
+
+            if (candidates.Count == 0)
+            {
+                return;
+            }
+
+            candidates.Sort(delegate (DistanceLabelCandidate a, DistanceLabelCandidate b)
+            {
+                var cmp = a.Distance.CompareTo(b.Distance);
+                return cmp != 0 ? cmp : b.Level.StartIndex.CompareTo(a.Level.StartIndex);
+            });
+
+            var font = Canvas.ChartFont;
+            var acceptedRects = new List<Rect>(MaxDistancePercentLabelsPerSide);
+            var chartRect = Canvas.Rect;
+            var acceptedCount = 0;
+
+            for (int i = 0; i < candidates.Count && acceptedCount < MaxDistancePercentLabelsPerSide; i++)
+            {
+                var text = FormatDistancePercent(candidates[i].Level.Price, currentPrice);
+                if (string.IsNullOrEmpty(text))
+                {
+                    continue;
+                }
+
+                var size = font.GetSize(text);
+                var lineY = GetY(candidates[i].Level.Price);
+                var x = chartRect.Right - size.Width - DistancePercentLabelPadding;
+                var y = lineY - size.Height - DistancePercentLabelLineGap;
+                var minY = chartRect.Top;
+                var maxY = chartRect.Bottom - size.Height;
+
+                if (x < chartRect.Left + DistancePercentLabelPadding)
+                {
+                    x = chartRect.Left + DistancePercentLabelPadding;
+                }
+
+                if (y < minY)
+                {
+                    y = lineY + DistancePercentLabelLineGap;
+                }
+
+                if (y > maxY)
+                {
+                    y = maxY;
+                }
+
+                if (y < minY)
+                {
+                    y = minY;
+                }
+
+                var labelRect = new Rect(x, y, size.Width, size.Height);
+                var overlaps = false;
+
+                for (int j = 0; j < acceptedRects.Count; j++)
+                {
+                    var acceptedRect = acceptedRects[j];
+                    if (labelRect.Bottom > acceptedRect.Top - DistancePercentLabelSpacing &&
+                        labelRect.Top < acceptedRect.Bottom + DistancePercentLabelSpacing)
+                    {
+                        overlaps = true;
+                        break;
+                    }
+                }
+
+                if (overlaps)
+                {
+                    continue;
+                }
+
+                acceptedRects.Add(labelRect);
+                visual.DrawString(
+                    text,
+                    font,
+                    new XBrush(candidates[i].Level.Color),
+                    labelRect);
+                acceptedCount++;
+            }
+        }
+
+        private double GetCurrentReferencePrice()
+        {
+            if (DataProvider != null)
+            {
+                var security = DataProvider.GetSecurity();
+                if (security != null)
+                {
+                    var lastPrice = (double)security.LastPrice;
+                    if (lastPrice > 0.0)
+                    {
+                        return lastPrice;
+                    }
+                }
+            }
+
+            if (Helper != null && Helper.Count > 0)
+            {
+                var closePrice = Helper.Close[Helper.Count - 1];
+                if (closePrice > 0.0)
+                {
+                    return closePrice;
+                }
+            }
+
+            return double.NaN;
+        }
+
+        private bool IsLevelInViewport(double price)
+        {
+            if (Canvas == null)
+            {
+                return false;
+            }
+
+            var y = GetY(price);
+            var rect = Canvas.Rect;
+            return y >= rect.Top && y <= rect.Bottom;
+        }
+
+        private static string FormatDistancePercent(double levelPrice, double currentPrice)
+        {
+            var percent = ((levelPrice - currentPrice) / currentPrice) * 100.0;
+            if (double.IsNaN(percent) || double.IsInfinity(percent))
+            {
+                return null;
+            }
+
+            return percent.ToString("+0.00;-0.00;0.00") + "%";
+        }
+
+        private static AkodeTrendlineAlgorithm NormalizeTrendlineAlgorithm(AkodeTrendlineAlgorithm value)
+        {
+            return value == AkodeTrendlineAlgorithm.WeightedRegression
+                ? AkodeTrendlineAlgorithm.WeightedRegression
+                : value == AkodeTrendlineAlgorithm.Ransac
+                    ? AkodeTrendlineAlgorithm.Ransac
+                    : value == AkodeTrendlineAlgorithm.HoughTransform
+                        ? AkodeTrendlineAlgorithm.HoughTransform
+                        : AkodeTrendlineAlgorithm.ClassicTouches;
+        }
+
+        private static AkodeTrendsProfileSettings CreateDefaultProfile(
+            int profileIndex,
+            bool enabledByDefault)
+        {
+            var profile = new AkodeTrendsProfileSettings
+            {
+                Enabled = enabledByDefault,
+                IncludeInTrendlines = profileIndex != 5,
+                CandlesBefore = 2,
+                CandlesAfter = 2,
+                MaxLinesHigh = 5,
+                MaxLinesLow = 5,
+                UseCandleBodyInsteadOfWicks = false,
+                MaxBrokenLinesHigh = 2,
+                MaxBrokenLinesLow = 2,
+                ShowBrokenLines = false
+            };
+
+            switch (profileIndex)
+            {
+                case 1:
+                    profile.PeriodType = AkodeLevelsPeriodType.Hour;
+                    profile.PeriodValue = 4;
+                    break;
+                case 2:
+                    profile.PeriodType = AkodeLevelsPeriodType.Hour;
+                    profile.PeriodValue = 1;
+                    break;
+                case 3:
+                    profile.PeriodType = AkodeLevelsPeriodType.Minute;
+                    profile.PeriodValue = 15;
+                    break;
+                case 4:
+                    profile.PeriodType = AkodeLevelsPeriodType.Minute;
+                    profile.PeriodValue = 1;
+                    break;
+                default:
+                    profile.PeriodType = AkodeLevelsPeriodType.AnyTimeFrame;
+                    profile.PeriodValue = 1;
+                    break;
+            }
+
+            profile.EnsureInitialized(profileIndex);
+            return profile;
         }
 
         private ChartLine GetProfileStyle(int profileIndex, bool isHigh)

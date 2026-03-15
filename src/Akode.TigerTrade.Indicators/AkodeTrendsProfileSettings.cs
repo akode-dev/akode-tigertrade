@@ -18,24 +18,6 @@ namespace Akode.TigerTrade.Indicators
     )]
     public sealed class AkodeTrendsProfileSettings : INotifyPropertyChanged, IDynamicProperty
     {
-        private static readonly XColor[] DefaultHighColors =
-        {
-            XColor.FromArgb(120, 8, 153, 129),
-            XColor.FromArgb(120, 46, 134, 193),
-            XColor.FromArgb(120, 85, 145, 80),
-            XColor.FromArgb(120, 0, 121, 107),
-            XColor.FromArgb(120, 121, 85, 72)
-        };
-
-        private static readonly XColor[] DefaultLowColors =
-        {
-            XColor.FromArgb(120, 247, 82, 95),
-            XColor.FromArgb(120, 255, 112, 67),
-            XColor.FromArgb(120, 233, 30, 99),
-            XColor.FromArgb(120, 171, 71, 188),
-            XColor.FromArgb(120, 229, 57, 53)
-        };
-
         private bool _enabled;
         private AkodeLevelsPeriodType _periodType;
         private int _periodValue;
@@ -328,6 +310,13 @@ namespace Akode.TigerTrade.Indicators
             EnsureLowSeries();
         }
 
+        public void ApplyDisplayDefaults(int profileIndex)
+        {
+            _profileIndex = Math.Max(1, profileIndex);
+            HighSeries.CopyTheme(CreateDefaultHighSeries(_profileIndex));
+            LowSeries.CopyTheme(CreateDefaultLowSeries(_profileIndex));
+        }
+
         public void CopyFrom(AkodeTrendsProfileSettings other)
         {
             if (other == null)
@@ -441,27 +430,50 @@ namespace Akode.TigerTrade.Indicators
 
         private ChartLine CreateDefaultHighSeries(int profileIndex)
         {
-            return CreateDefaultSeries(DefaultHighColors[GetColorIndex(profileIndex)]);
+            switch (Math.Max(1, profileIndex))
+            {
+                case 1:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 0, 100, 0), 2, XDashStyle.Solid);
+                case 2:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 0, 100, 0), 1, XDashStyle.Solid);
+                case 3:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 63, 164, 122), 1, XDashStyle.Dash);
+                case 4:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 0, 100, 0), 1, XDashStyle.Dot);
+                case 5:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 178, 34, 34), 1, XDashStyle.Solid);
+                default:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 0, 100, 0), 1, XDashStyle.Solid);
+            }
         }
 
         private ChartLine CreateDefaultLowSeries(int profileIndex)
         {
-            return CreateDefaultSeries(DefaultLowColors[GetColorIndex(profileIndex)]);
+            switch (Math.Max(1, profileIndex))
+            {
+                case 1:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 255, 0, 0), 2, XDashStyle.Solid);
+                case 2:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 178, 34, 34), 1, XDashStyle.Solid);
+                case 3:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 222, 92, 92), 1, XDashStyle.Dash);
+                case 4:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 255, 0, 0), 1, XDashStyle.Dot);
+                case 5:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 63, 164, 122), 1, XDashStyle.Solid);
+                default:
+                    return CreateDefaultSeries(XColor.FromArgb(255, 255, 0, 0), 1, XDashStyle.Solid);
+            }
         }
 
-        private static ChartLine CreateDefaultSeries(XColor color)
+        private static ChartLine CreateDefaultSeries(XColor color, int width, XDashStyle style)
         {
             return new ChartLine
             {
-                Style = XDashStyle.Solid,
-                Width = 1,
+                Style = style,
+                Width = width,
                 Color = color
             };
-        }
-
-        private static int GetColorIndex(int profileIndex)
-        {
-            return Math.Max(0, Math.Min(DefaultHighColors.Length - 1, profileIndex - 1));
         }
 
         private void OnPropertyChanged([CallerMemberName] string propertyName = null)
