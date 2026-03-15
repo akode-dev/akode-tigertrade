@@ -54,6 +54,7 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 - Per-profile timeframe, pivot sensitivity, body/wick mode, limits, broken-level handling, and display styles.
 - Per-profile toggle for trendline participation ("Include in trend lines").
 - Horizontal levels rendered separately per profile with cross-profile global filters.
+- Optional live percent-distance labels on the chart for the nearest visible support/resistance levels.
 - Global level filters: max total lines, time-based filtering, and merge of nearby levels.
 - Combined upper and lower trend rays built from filtered visible levels.
 - Selectable trendline algorithms: Classic Touches, Weighted Regression, RANSAC, Hough Transform.
@@ -92,6 +93,7 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 | Time filter (minutes) | 0 | Only show levels whose pivots occurred within the last N minutes. 0 = disabled. |
 | Level merge (ticks) | 0 | Merge horizontal levels within N ticks of each other, keeping the strongest. 0 = disabled. |
 | Apply filters to trend lines | true | Whether global level filters also affect trendline input. |
+| Show distance % labels | false | Draw live percent distance to the nearest visible levels directly on the chart. |
 
 #### Trend Lines Settings
 

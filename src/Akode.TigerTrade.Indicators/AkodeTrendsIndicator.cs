@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.Serialization;
+using System.Windows;
 using TigerTrade.Chart.Base;
 using TigerTrade.Chart.Indicators.Common;
 using TigerTrade.Chart.Indicators.Drawings;
@@ -19,6 +20,26 @@ namespace Akode.TigerTrade.Indicators
     [Indicator("X_AkodeTrendsIndicator", "_Akode: Trends", true, Type = typeof(AkodeTrendsIndicator))]
     public sealed class AkodeTrendsIndicator : IndicatorBase
     {
+        private const int MaxDistancePercentLabelsPerSide = 10;
+        private const double DistancePercentLabelPadding = 6.0;
+        private const double DistancePercentLabelLineGap = 4.0;
+        private const double DistancePercentLabelSpacing = 2.0;
+
+        private struct VisibleHorizontalLevel
+        {
+            public double Price;
+            public int StartIndex;
+            public bool IsHigh;
+            public XColor Color;
+            public bool ShowScaleLabel;
+        }
+
+        private struct DistanceLabelCandidate
+        {
+            public VisibleHorizontalLevel Level;
+            public double Distance;
+        }
+
         private AkodeTrendsProfileSettings _profile1;
         private AkodeTrendsProfileSettings _profile2;
         private AkodeTrendsProfileSettings _profile3;
@@ -53,11 +74,13 @@ namespace Akode.TigerTrade.Indicators
         private int _cachedAtDataLength;
         private DateTime _cachedAtTime;
         private double _cachedFirstBarPrice;
+        private bool _showDistancePercentLabels;
         private bool _showBaseLine;
         private int _baseLineToleranceTicks = 3;
         private int _baseLineLookbackBars;
         private int _baseLineLookbackMinutes;
         private ChartLine _baseLineSeries;
+        private List<VisibleHorizontalLevel> _visibleHorizontalLevels;
 
         [Browsable(false)]
         public override IndicatorCalculation Calculation
@@ -229,6 +252,23 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 _applyLevelFiltersToTrendlines = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ShowDistancePercentLabels")]
+        [Category("Level lines"), DisplayName("Show distance % labels")]
+        public bool ShowDistancePercentLabels
+        {
+            get { return _showDistancePercentLabels; }
+            set
+            {
+                if (value == _showDistancePercentLabels)
+                {
+                    return;
+                }
+
+                _showDistancePercentLabels = value;
                 OnPropertyChanged();
             }
         }
@@ -424,6 +464,8 @@ namespace Akode.TigerTrade.Indicators
             get { return _trendlineAlgorithm; }
             set
             {
+                value = NormalizeTrendlineAlgorithm(value);
+
                 if (value == _trendlineAlgorithm)
                 {
                     return;
@@ -700,6 +742,7 @@ namespace Akode.TigerTrade.Indicators
             InitializeProfiles();
             InitializeTrendStyles();
             EnsureBaseLineSeries();
+            EnsureVisibleHorizontalLevels();
         }
 
         [OnDeserialized]
@@ -708,6 +751,7 @@ namespace Akode.TigerTrade.Indicators
             InitializeProfiles();
             InitializeTrendStyles();
             EnsureBaseLineSeries();
+            EnsureVisibleHorizontalLevels();
         }
 
         public override void ApplyColors(IChartTheme theme)
@@ -748,6 +792,7 @@ namespace Akode.TigerTrade.Indicators
             LevelTimeFilterMinutes = source.LevelTimeFilterMinutes;
             LevelMergeDistanceTicks = source.LevelMergeDistanceTicks;
             ApplyLevelFiltersToTrendlines = source.ApplyLevelFiltersToTrendlines;
+            ShowDistancePercentLabels = source.ShowDistancePercentLabels;
 
             ShowTrendLines = source.ShowTrendLines;
             MaxHighTrendLines = source.MaxHighTrendLines;
@@ -783,6 +828,9 @@ namespace Akode.TigerTrade.Indicators
         protected override void Execute()
         {
             var dataLength = Helper.Count;
+            EnsureVisibleHorizontalLevels();
+            _visibleHorizontalLevels.Clear();
+
             if (dataLength == 0)
             {
                 return;
@@ -846,6 +894,46 @@ namespace Akode.TigerTrade.Indicators
                 selection.LowTrendLines,
                 LowTrendSeries,
                 dataLength);
+        }
+
+        public override void GetLabels(ref List<IndicatorLabelInfo> labels)
+        {
+            EnsureVisibleHorizontalLevels();
+
+            if (!ShowIndicatorLabels || _visibleHorizontalLevels.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _visibleHorizontalLevels.Count; i++)
+            {
+                var level = _visibleHorizontalLevels[i];
+                if (!level.ShowScaleLabel || !IsLevelInViewport(level.Price))
+                {
+                    continue;
+                }
+
+                labels.Add(new IndicatorLabelInfo(level.Price, level.Color));
+            }
+        }
+
+        public override void Render(DxVisualQueue visual)
+        {
+            EnsureVisibleHorizontalLevels();
+
+            if (!ShowDistancePercentLabels || _visibleHorizontalLevels.Count == 0 || Canvas == null)
+            {
+                return;
+            }
+
+            var currentPrice = GetCurrentReferencePrice();
+            if (double.IsNaN(currentPrice) || double.IsInfinity(currentPrice) || Math.Abs(currentPrice) < double.Epsilon)
+            {
+                return;
+            }
+
+            DrawDistancePercentLabels(visual, currentPrice, true);
+            DrawDistancePercentLabels(visual, currentPrice, false);
         }
 
         private TrendsCalculationEngine.TrendSelectionResult GetOrComputeTrendSelection(
@@ -1058,10 +1146,19 @@ namespace Akode.TigerTrade.Indicators
             _baseLineSeries.PropertyChanged += HandleNestedSettingsChanged;
         }
 
+        private void EnsureVisibleHorizontalLevels()
+        {
+            if (_visibleHorizontalLevels == null)
+            {
+                _visibleHorizontalLevels = new List<VisibleHorizontalLevel>();
+            }
+        }
+
         private void HandleNestedSettingsChanged(object sender, PropertyChangedEventArgs e)
         {
             OnPropertyChanged(string.Empty);
         }
+
 
         private List<TrendsCalculationEngine.LevelLine> CollectAllRawPivots()
         {
@@ -1273,6 +1370,8 @@ namespace Akode.TigerTrade.Indicators
             bool isHigh,
             int dataLength)
         {
+            var seriesLength = GetHorizontalSeriesLength(dataLength);
+
             foreach (var level in levels)
             {
                 var style = GetProfileStyle(level.ProfileIndex, isHigh);
@@ -1281,8 +1380,20 @@ namespace Akode.TigerTrade.Indicators
                     continue;
                 }
 
-                var data = CreateSeriesData(dataLength, level.StartIndex, delegate { return level.Price; });
+                var data = CreateSeriesData(seriesLength, level.StartIndex, delegate { return level.Price; });
                 var lineStyle = CloneLine(style, level.IsBroken ? XDashStyle.Dot : style.Style);
+
+                if (lineStyle.Visible)
+                {
+                    _visibleHorizontalLevels.Add(new VisibleHorizontalLevel
+                    {
+                        Price = level.Price,
+                        StartIndex = level.StartIndex,
+                        IsHigh = isHigh,
+                        Color = lineStyle.Color,
+                        ShowScaleLabel = true
+                    });
+                }
 
                 Series.Add(new IndicatorSeriesData(data, lineStyle)
                 {
@@ -1292,6 +1403,188 @@ namespace Akode.TigerTrade.Indicators
                     }
                 });
             }
+        }
+
+        private int GetHorizontalSeriesLength(int dataLength)
+        {
+            var afterBars = Canvas != null ? Math.Max(0, Canvas.AfterBars) : 0;
+            return dataLength + afterBars;
+        }
+
+        private void DrawDistancePercentLabels(
+            DxVisualQueue visual,
+            double currentPrice,
+            bool highSide)
+        {
+            var candidates = new List<DistanceLabelCandidate>();
+
+            for (int i = 0; i < _visibleHorizontalLevels.Count; i++)
+            {
+                var level = _visibleHorizontalLevels[i];
+                if (level.IsHigh != highSide || !IsLevelInViewport(level.Price))
+                {
+                    continue;
+                }
+
+                var distance = level.Price - currentPrice;
+                if (highSide)
+                {
+                    if (distance <= 0.0)
+                    {
+                        continue;
+                    }
+                }
+                else if (distance >= 0.0)
+                {
+                    continue;
+                }
+
+                candidates.Add(new DistanceLabelCandidate
+                {
+                    Level = level,
+                    Distance = Math.Abs(distance)
+                });
+            }
+
+            if (candidates.Count == 0)
+            {
+                return;
+            }
+
+            candidates.Sort(delegate (DistanceLabelCandidate a, DistanceLabelCandidate b)
+            {
+                var cmp = a.Distance.CompareTo(b.Distance);
+                return cmp != 0 ? cmp : b.Level.StartIndex.CompareTo(a.Level.StartIndex);
+            });
+
+            var font = Canvas.ChartFont;
+            var acceptedRects = new List<Rect>(MaxDistancePercentLabelsPerSide);
+            var chartRect = Canvas.Rect;
+            var acceptedCount = 0;
+
+            for (int i = 0; i < candidates.Count && acceptedCount < MaxDistancePercentLabelsPerSide; i++)
+            {
+                var text = FormatDistancePercent(candidates[i].Level.Price, currentPrice);
+                if (string.IsNullOrEmpty(text))
+                {
+                    continue;
+                }
+
+                var size = font.GetSize(text);
+                var lineY = GetY(candidates[i].Level.Price);
+                var x = chartRect.Right - size.Width - DistancePercentLabelPadding;
+                var y = lineY - size.Height - DistancePercentLabelLineGap;
+                var minY = chartRect.Top;
+                var maxY = chartRect.Bottom - size.Height;
+
+                if (x < chartRect.Left + DistancePercentLabelPadding)
+                {
+                    x = chartRect.Left + DistancePercentLabelPadding;
+                }
+
+                if (y < minY)
+                {
+                    y = lineY + DistancePercentLabelLineGap;
+                }
+
+                if (y > maxY)
+                {
+                    y = maxY;
+                }
+
+                if (y < minY)
+                {
+                    y = minY;
+                }
+
+                var labelRect = new Rect(x, y, size.Width, size.Height);
+                var overlaps = false;
+
+                for (int j = 0; j < acceptedRects.Count; j++)
+                {
+                    var acceptedRect = acceptedRects[j];
+                    if (labelRect.Bottom > acceptedRect.Top - DistancePercentLabelSpacing &&
+                        labelRect.Top < acceptedRect.Bottom + DistancePercentLabelSpacing)
+                    {
+                        overlaps = true;
+                        break;
+                    }
+                }
+
+                if (overlaps)
+                {
+                    continue;
+                }
+
+                acceptedRects.Add(labelRect);
+                visual.DrawString(
+                    text,
+                    font,
+                    new XBrush(candidates[i].Level.Color),
+                    labelRect);
+                acceptedCount++;
+            }
+        }
+
+        private double GetCurrentReferencePrice()
+        {
+            if (DataProvider != null)
+            {
+                var security = DataProvider.GetSecurity();
+                if (security != null)
+                {
+                    var lastPrice = (double)security.LastPrice;
+                    if (lastPrice > 0.0)
+                    {
+                        return lastPrice;
+                    }
+                }
+            }
+
+            if (Helper != null && Helper.Count > 0)
+            {
+                var closePrice = Helper.Close[Helper.Count - 1];
+                if (closePrice > 0.0)
+                {
+                    return closePrice;
+                }
+            }
+
+            return double.NaN;
+        }
+
+        private bool IsLevelInViewport(double price)
+        {
+            if (Canvas == null)
+            {
+                return false;
+            }
+
+            var y = GetY(price);
+            var rect = Canvas.Rect;
+            return y >= rect.Top && y <= rect.Bottom;
+        }
+
+        private static string FormatDistancePercent(double levelPrice, double currentPrice)
+        {
+            var percent = ((levelPrice - currentPrice) / currentPrice) * 100.0;
+            if (double.IsNaN(percent) || double.IsInfinity(percent))
+            {
+                return null;
+            }
+
+            return percent.ToString("+0.00;-0.00;0.00") + "%";
+        }
+
+        private static AkodeTrendlineAlgorithm NormalizeTrendlineAlgorithm(AkodeTrendlineAlgorithm value)
+        {
+            return value == AkodeTrendlineAlgorithm.WeightedRegression
+                ? AkodeTrendlineAlgorithm.WeightedRegression
+                : value == AkodeTrendlineAlgorithm.Ransac
+                    ? AkodeTrendlineAlgorithm.Ransac
+                    : value == AkodeTrendlineAlgorithm.HoughTransform
+                        ? AkodeTrendlineAlgorithm.HoughTransform
+                        : AkodeTrendlineAlgorithm.ClassicTouches;
         }
 
         private ChartLine GetProfileStyle(int profileIndex, bool isHigh)
