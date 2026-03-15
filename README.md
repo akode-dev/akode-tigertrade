@@ -61,6 +61,7 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 - Trendline merge to deduplicate similar diagonal lines.
 - Independent slope filters for upper and lower trendlines.
 - Optional hiding of trendlines already broken by candle bodies.
+- Base line detection — single strongest horizontal level based on pivot density and confirmed price bounces, with configurable lookback window.
 - Theme/template integration through TigerTrade indicator APIs.
 
 #### Profile Settings (per profile)
@@ -116,6 +117,16 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 | Trend merge (ticks) | 0 | Merge similar diagonal trendlines within N ticks distance. 0 = disabled. |
 | High trends | Gray line | Style/color for upper trend rays. |
 | Low trends | Gray line | Style/color for lower trend rays. |
+
+#### Base Line Settings
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| Show base line | false | Enable the base line — single strongest horizontal level. |
+| Tolerance (ticks) | 3 | Tolerance for grouping pivots and detecting price touches. |
+| Lookback (bars) | 0 | Limit evaluation to the last N bars. 0 = full history. |
+| Lookback (minutes) | 0 | Limit evaluation to the last N minutes. 0 = full history. |
+| Base line style | Yellow line (width 3) | Style/color for the base line. |
 
 More indicators can be added to this package over time.
 
