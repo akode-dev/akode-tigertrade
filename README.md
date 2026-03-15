@@ -90,7 +90,7 @@ More indicators can be added to this package over time.
 | Indicator | Preview |
 | --- | --- |
 | Akode Levels | ![Akode Levels](docs/images/levels-indicator.png) |
-| Akode Trends | Screenshot TBD |
+| Akode Trends | ![Akode Trends](docs/images/tranding-indicator.png) ![Akode Trends](docs/images/tranding-indicator-settings.png) |
 
 ## Requirements
 

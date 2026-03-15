@@ -46,6 +46,13 @@ namespace Akode.TigerTrade.Indicators
         private int _levelTimeFilterMinutes;
         private int _levelMergeDistanceTicks;
         private bool _applyLevelFiltersToTrendlines = true;
+        private int _trendlineMemoryBars;
+        private int _trendlineMemoryMinutes;
+        private int _trendlineMergeTicks;
+        private TrendsCalculationEngine.TrendSelectionResult _cachedTrendSelection;
+        private int _cachedAtDataLength;
+        private DateTime _cachedAtTime;
+        private double _cachedFirstBarPrice;
 
         [Browsable(false)]
         public override IndicatorCalculation Calculation
@@ -186,7 +193,7 @@ namespace Akode.TigerTrade.Indicators
         }
 
         [DataMember(Name = "LevelMergeDistanceTicks")]
-        [Category("Level lines"), DisplayName("Merge distance (ticks)")]
+        [Category("Level lines"), DisplayName("Level merge (ticks)")]
         public int LevelMergeDistanceTicks
         {
             get { return _levelMergeDistanceTicks; }
@@ -496,6 +503,65 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
+        [DataMember(Name = "TrendlineMemoryBars")]
+        [Category("Trend lines"), DisplayName("Memory (bars)")]
+        public int TrendlineMemoryBars
+        {
+            get { return _trendlineMemoryBars; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _trendlineMemoryBars)
+                {
+                    return;
+                }
+
+                _trendlineMemoryBars = value;
+                _cachedTrendSelection = null;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "TrendlineMemoryMinutes")]
+        [Category("Trend lines"), DisplayName("Memory (minutes)")]
+        public int TrendlineMemoryMinutes
+        {
+            get { return _trendlineMemoryMinutes; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _trendlineMemoryMinutes)
+                {
+                    return;
+                }
+
+                _trendlineMemoryMinutes = value;
+                _cachedTrendSelection = null;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "TrendlineMergeTicks")]
+        [Category("Trend lines"), DisplayName("Trend merge (ticks)")]
+        public int TrendlineMergeTicks
+        {
+            get { return _trendlineMergeTicks; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _trendlineMergeTicks)
+                {
+                    return;
+                }
+
+                _trendlineMergeTicks = value;
+                OnPropertyChanged();
+            }
+        }
+
         [DataMember(Name = "HighTrendSeries")]
         [Category("Trend display"), DisplayName("High trends")]
         public ChartLine HighTrendSeries
@@ -591,6 +657,9 @@ namespace Akode.TigerTrade.Indicators
             HideBrokenTrendLines = source.HideBrokenTrendLines;
             TrendlineBreakBars = source.TrendlineBreakBars;
             TrendlineBreakToleranceTicks = source.TrendlineBreakToleranceTicks;
+            TrendlineMemoryBars = source.TrendlineMemoryBars;
+            TrendlineMemoryMinutes = source.TrendlineMemoryMinutes;
+            TrendlineMergeTicks = source.TrendlineMergeTicks;
 
             HighTrendSeries.CopyTheme(source.HighTrendSeries);
             LowTrendSeries.CopyTheme(source.LowTrendSeries);
@@ -628,6 +697,49 @@ namespace Akode.TigerTrade.Indicators
                 return;
             }
 
+            var selection = GetOrComputeTrendSelection(
+                highLevels, lowLevels, filteredHigh, filteredLow, dataLength, priceStep);
+
+            if (_trendlineMergeTicks > 0 && priceStep > 0.0)
+            {
+                MergeSimilarTrendlines(selection.HighTrendLines, priceStep, dataLength);
+                MergeSimilarTrendlines(selection.LowTrendLines, priceStep, dataLength);
+            }
+
+            DrawTrendLines(
+                selection.HighTrendLines,
+                HighTrendSeries,
+                dataLength);
+
+            DrawTrendLines(
+                selection.LowTrendLines,
+                LowTrendSeries,
+                dataLength);
+        }
+
+        private TrendsCalculationEngine.TrendSelectionResult GetOrComputeTrendSelection(
+            List<TrendsCalculationEngine.LevelLine> highLevels,
+            List<TrendsCalculationEngine.LevelLine> lowLevels,
+            List<TrendsCalculationEngine.LevelLine> filteredHigh,
+            List<TrendsCalculationEngine.LevelLine> filteredLow,
+            int dataLength,
+            double priceStep)
+        {
+            var barMemoryActive = _trendlineMemoryBars > 0 &&
+                (dataLength - _cachedAtDataLength) < _trendlineMemoryBars;
+            var timeMemoryActive = _trendlineMemoryMinutes > 0 &&
+                (DateTime.UtcNow - _cachedAtTime).TotalMinutes < _trendlineMemoryMinutes;
+            var firstBarPrice = Helper.Open[0];
+            var cacheValid = _cachedTrendSelection != null &&
+                _cachedAtDataLength <= dataLength &&
+                _cachedFirstBarPrice == firstBarPrice &&
+                (barMemoryActive || timeMemoryActive);
+
+            if (cacheValid)
+            {
+                return _cachedTrendSelection;
+            }
+
             var tolerance = DataProvider != null
                 ? Math.Max(0, TrendlineToleranceTicks) * DataProvider.Step
                 : 0.0;
@@ -641,6 +753,7 @@ namespace Akode.TigerTrade.Indicators
                 _applyLevelFiltersToTrendlines ? filteredHigh : highLevels);
             var trendLowInput = FilterByTrendlineEligibility(
                 _applyLevelFiltersToTrendlines ? filteredLow : lowLevels);
+
             var selection = TrendsCalculationEngine.SelectTrendLines(
                 trendHighInput,
                 trendLowInput,
@@ -662,15 +775,42 @@ namespace Akode.TigerTrade.Indicators
                 bodyHigh,
                 bodyLow);
 
-            DrawTrendLines(
-                selection.HighTrendLines,
-                HighTrendSeries,
-                dataLength);
+            if (_trendlineMemoryBars > 0 || _trendlineMemoryMinutes > 0)
+            {
+                _cachedTrendSelection = selection;
+                _cachedAtDataLength = dataLength;
+                _cachedAtTime = DateTime.UtcNow;
+                _cachedFirstBarPrice = firstBarPrice;
+            }
 
-            DrawTrendLines(
-                selection.LowTrendLines,
-                LowTrendSeries,
-                dataLength);
+            return selection;
+        }
+
+        private void MergeSimilarTrendlines(
+            List<TrendsCalculationEngine.TrendLineCandidate> lines,
+            double priceStep,
+            int dataLength)
+        {
+            var mergeDistance = _trendlineMergeTicks * priceStep;
+            var lastIndex = dataLength - 1;
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var priceIEnd = lines[i].GetValue(lastIndex);
+
+                for (int j = lines.Count - 1; j > i; j--)
+                {
+                    var overlapStart = Math.Max(lines[i].StartIndex, lines[j].StartIndex);
+                    var diffAtStart = Math.Abs(lines[i].GetValue(overlapStart) - lines[j].GetValue(overlapStart));
+                    var diffAtEnd = Math.Abs(priceIEnd - lines[j].GetValue(lastIndex));
+                    var maxDiff = Math.Max(diffAtStart, diffAtEnd);
+
+                    if (maxDiff <= mergeDistance)
+                    {
+                        lines.RemoveAt(j);
+                    }
+                }
+            }
         }
 
         private void InitializeProfiles()
