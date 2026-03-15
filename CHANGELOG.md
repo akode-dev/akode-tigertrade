@@ -7,17 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-03-15
+
 ### Added
 
 - `AkodeTrendsIndicator` with 5 independent internal levels profiles.
 - Shared upper/lower trendline rendering from combined visible support and resistance levels.
-- Per-profile candle body mode for pivot detection in the new trends indicator.
+- Per-profile candle body mode for pivot detection.
 - Configurable left/right padding bars for trendline overhang.
-- Selectable trendline algorithms with price/timeframe-aware ranking and same-side cleanup.
-- Configurable filtering of old support/resistance crossings for trendline pairs.
-- Additional trendline modes: outer envelope, consensus, and weighted regression.
+- Selectable trendline algorithms: Classic Touches, Weighted Regression, RANSAC, Hough Transform.
 - Body-based hiding of already broken trendlines with configurable bar count and tolerance.
-- `Break bars` now counts total body-break bars after the first anchor point instead of only consecutive breaks after the second point.
+- Global level filters: max total high/low levels, time filter (minutes), level merge (ticks).
+- Per-profile "Include in trend lines" toggle.
+- "Apply filters to trend lines" toggle for level filter propagation.
+- Trendline memory (bars/minutes) to prevent redrawing.
+- Trend merge (ticks) for deduplicating similar diagonal trendlines.
+
+### Changed
+
+- Simplified trendline algorithms to two core types, then expanded with RANSAC and Hough Transform.
+- Removed legacy trendline algorithm enum values.
 
 ## [1.0.0] - 2026-02-24
 
