@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-03-15
+
+### Added
+
+- Base line detection — single strongest horizontal level based on pivot density and confirmed price bounces, with configurable lookback window (bars/minutes).
+- Live percent-distance labels rendered on the chart for nearest visible support/resistance levels.
+- Price scale labels for visible horizontal levels via GetLabels override.
+
+### Changed
+
+- Tuned default values for better out-of-box experience (tolerance, padding, algorithm, merge/level limits).
+- Replaced profile color arrays with per-profile display presets (width, dash style, color per profile index).
+
 ## [1.1.0] - 2026-03-15
 
 ### Added
