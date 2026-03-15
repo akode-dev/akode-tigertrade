@@ -41,6 +41,9 @@ namespace Akode.TigerTrade.Indicators
         private int _trendlineBreakToleranceTicks = 2;
         private ChartLine _highTrendSeries;
         private ChartLine _lowTrendSeries;
+        private int _maxTotalHighLevels;
+        private int _maxTotalLowLevels;
+        private int _levelTimeFilterMinutes;
 
         [Browsable(false)]
         public override IndicatorCalculation Calculation
@@ -120,6 +123,63 @@ namespace Akode.TigerTrade.Indicators
             set
             {
                 SetProfile(ref _profile5, value, 5, false);
+            }
+        }
+
+        [DataMember(Name = "MaxTotalHighLevels")]
+        [Category("Level lines"), DisplayName("Max total High levels")]
+        public int MaxTotalHighLevels
+        {
+            get { return _maxTotalHighLevels; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _maxTotalHighLevels)
+                {
+                    return;
+                }
+
+                _maxTotalHighLevels = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "MaxTotalLowLevels")]
+        [Category("Level lines"), DisplayName("Max total Low levels")]
+        public int MaxTotalLowLevels
+        {
+            get { return _maxTotalLowLevels; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _maxTotalLowLevels)
+                {
+                    return;
+                }
+
+                _maxTotalLowLevels = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "LevelTimeFilterMinutes")]
+        [Category("Level lines"), DisplayName("Time filter (minutes)")]
+        public int LevelTimeFilterMinutes
+        {
+            get { return _levelTimeFilterMinutes; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _levelTimeFilterMinutes)
+                {
+                    return;
+                }
+
+                _levelTimeFilterMinutes = value;
+                OnPropertyChanged();
             }
         }
 
@@ -472,6 +532,10 @@ namespace Akode.TigerTrade.Indicators
             Profile4.CopyFrom(source.Profile4);
             Profile5.CopyFrom(source.Profile5);
 
+            MaxTotalHighLevels = source.MaxTotalHighLevels;
+            MaxTotalLowLevels = source.MaxTotalLowLevels;
+            LevelTimeFilterMinutes = source.LevelTimeFilterMinutes;
+
             ShowTrendLines = source.ShowTrendLines;
             MaxHighTrendLines = source.MaxHighTrendLines;
             MaxLowTrendLines = source.MaxLowTrendLines;
@@ -505,11 +569,17 @@ namespace Akode.TigerTrade.Indicators
             var highLevels = new List<TrendsCalculationEngine.LevelLine>();
             var lowLevels = new List<TrendsCalculationEngine.LevelLine>();
 
-            RenderProfile(Profile1, 1, dataLength, highLevels, lowLevels);
-            RenderProfile(Profile2, 2, dataLength, highLevels, lowLevels);
-            RenderProfile(Profile3, 3, dataLength, highLevels, lowLevels);
-            RenderProfile(Profile4, 4, dataLength, highLevels, lowLevels);
-            RenderProfile(Profile5, 5, dataLength, highLevels, lowLevels);
+            CollectProfileLevels(Profile1, 1, highLevels, lowLevels);
+            CollectProfileLevels(Profile2, 2, highLevels, lowLevels);
+            CollectProfileLevels(Profile3, 3, highLevels, lowLevels);
+            CollectProfileLevels(Profile4, 4, highLevels, lowLevels);
+            CollectProfileLevels(Profile5, 5, highLevels, lowLevels);
+
+            var filteredHigh = ApplyLevelFilters(highLevels, true, dataLength);
+            var filteredLow = ApplyLevelFilters(lowLevels, false, dataLength);
+
+            DrawFilteredHorizontalLines(filteredHigh, true, dataLength);
+            DrawFilteredHorizontalLines(filteredLow, false, dataLength);
 
             if (!ShowTrendLines)
             {
@@ -527,8 +597,8 @@ namespace Akode.TigerTrade.Indicators
             var bodyHigh = BuildBodyHigh(Helper.Open, Helper.Close);
             var bodyLow = BuildBodyLow(Helper.Open, Helper.Close);
             var selection = TrendsCalculationEngine.SelectTrendLines(
-                highLevels,
-                lowLevels,
+                filteredHigh,
+                filteredLow,
                 TrendlineAlgorithm,
                 HighSlopeFilterEnabled,
                 LowSlopeFilterEnabled,
@@ -656,12 +726,11 @@ namespace Akode.TigerTrade.Indicators
             OnPropertyChanged(string.Empty);
         }
 
-        private void RenderProfile(
+        private void CollectProfileLevels(
             AkodeTrendsProfileSettings profile,
             int profileIndex,
-            int dataLength,
-            List<TrendsCalculationEngine.LevelLine> visibleHighLevels,
-            List<TrendsCalculationEngine.LevelLine> visibleLowLevels)
+            List<TrendsCalculationEngine.LevelLine> highLevels,
+            List<TrendsCalculationEngine.LevelLine> lowLevels)
         {
             if (profile == null || !profile.Enabled)
             {
@@ -670,22 +739,54 @@ namespace Akode.TigerTrade.Indicators
 
             var result = TrendsCalculationEngine.CalculateLevels(Helper, DataProvider, profile, profileIndex);
 
-            DrawHorizontalLines(result.HighLevels, profile.HighSeries, dataLength);
-            DrawHorizontalLines(result.LowLevels, profile.LowSeries, dataLength);
-
-            visibleHighLevels.AddRange(result.HighLevels);
-            visibleLowLevels.AddRange(result.LowLevels);
+            highLevels.AddRange(result.HighLevels);
+            lowLevels.AddRange(result.LowLevels);
         }
 
-        private void DrawHorizontalLines(
-            IEnumerable<TrendsCalculationEngine.LevelLine> lines,
-            ChartLine baseStyle,
+        private List<TrendsCalculationEngine.LevelLine> ApplyLevelFilters(
+            List<TrendsCalculationEngine.LevelLine> levels,
+            bool isHigh,
             int dataLength)
         {
-            foreach (var line in lines)
+            var filtered = new List<TrendsCalculationEngine.LevelLine>(levels);
+
+            if (_levelTimeFilterMinutes > 0 && dataLength > 0)
             {
-                var data = CreateSeriesData(dataLength, line.StartIndex, delegate { return line.Price; });
-                var lineStyle = CloneLine(baseStyle, line.IsBroken ? XDashStyle.Dot : baseStyle.Style);
+                var date = Helper.Date;
+                var currentTime = DateTime.FromOADate(date[dataLength - 1]);
+                var cutoff = currentTime.AddMinutes(-_levelTimeFilterMinutes);
+
+                filtered.RemoveAll(level =>
+                    level.StartIndex >= 0 && level.StartIndex < dataLength &&
+                    DateTime.FromOADate(date[level.StartIndex]) < cutoff);
+            }
+
+            var maxTotal = isHigh ? _maxTotalHighLevels : _maxTotalLowLevels;
+
+            if (maxTotal > 0 && filtered.Count > maxTotal)
+            {
+                filtered.Sort((a, b) => b.StartIndex.CompareTo(a.StartIndex));
+                filtered.RemoveRange(maxTotal, filtered.Count - maxTotal);
+            }
+
+            return filtered;
+        }
+
+        private void DrawFilteredHorizontalLines(
+            List<TrendsCalculationEngine.LevelLine> levels,
+            bool isHigh,
+            int dataLength)
+        {
+            foreach (var level in levels)
+            {
+                var style = GetProfileStyle(level.ProfileIndex, isHigh);
+                if (style == null)
+                {
+                    continue;
+                }
+
+                var data = CreateSeriesData(dataLength, level.StartIndex, delegate { return level.Price; });
+                var lineStyle = CloneLine(style, level.IsBroken ? XDashStyle.Dot : style.Style);
 
                 Series.Add(new IndicatorSeriesData(data, lineStyle)
                 {
@@ -694,6 +795,19 @@ namespace Akode.TigerTrade.Indicators
                         DisableMinMax = true
                     }
                 });
+            }
+        }
+
+        private ChartLine GetProfileStyle(int profileIndex, bool isHigh)
+        {
+            switch (profileIndex)
+            {
+                case 1: return isHigh ? Profile1.HighSeries : Profile1.LowSeries;
+                case 2: return isHigh ? Profile2.HighSeries : Profile2.LowSeries;
+                case 3: return isHigh ? Profile3.HighSeries : Profile3.LowSeries;
+                case 4: return isHigh ? Profile4.HighSeries : Profile4.LowSeries;
+                case 5: return isHigh ? Profile5.HighSeries : Profile5.LowSeries;
+                default: return null;
             }
         }
 
