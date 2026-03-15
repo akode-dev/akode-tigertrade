@@ -388,15 +388,7 @@ namespace Akode.TigerTrade.Indicators
                         }
                     }
 
-                    TrendLineCandidate candidate;
-                    if (algorithm == AkodeTrendlineAlgorithm.Consensus)
-                    {
-                        candidate = EvaluateConsensusCandidate(levels, isHigh, first, second, slope, minTouches, tolerance, priceStep);
-                    }
-                    else
-                    {
-                        candidate = EvaluateStrictCandidate(levels, isHigh, first, second, slope, minTouches, tolerance, priceStep);
-                    }
+                    var candidate = EvaluateStrictCandidate(levels, isHigh, first, second, slope, minTouches, tolerance, priceStep);
 
                     if (candidate == null)
                     {
@@ -528,32 +520,6 @@ namespace Akode.TigerTrade.Indicators
                 first.StartIndex,
                 false,
                 tolerance);
-        }
-
-        private static TrendLineCandidate EvaluateConsensusCandidate(
-            List<LevelLine> levels,
-            bool isHigh,
-            LevelLine first,
-            LevelLine second,
-            double slope,
-            int minTouches,
-            double tolerance,
-            double priceStep)
-        {
-            var weakTolerance = Math.Max(tolerance * 2.5, tolerance + (2.0 * priceStep));
-
-            return EvaluateLineCandidate(
-                levels,
-                isHigh,
-                first.StartIndex,
-                first.Price,
-                slope,
-                minTouches,
-                tolerance,
-                priceStep,
-                first.StartIndex,
-                true,
-                weakTolerance);
         }
 
         private static TrendLineCandidate EvaluateLineCandidate(
@@ -813,13 +779,6 @@ namespace Akode.TigerTrade.Indicators
             var minFreshness = candidates.Min(candidate => candidate.LastTouchIndex);
             var maxResidual = candidates.Max(candidate => candidate.AverageResidualTicks);
             var minResidual = candidates.Min(candidate => candidate.AverageResidualTicks);
-            var maxSlack = candidates.Max(candidate => candidate.EnvelopeSlackTicks);
-            var minSlack = candidates.Min(candidate => candidate.EnvelopeSlackTicks);
-            var maxOuterDistance = candidates.Max(candidate => candidate.OuterDistanceTicks);
-            var minOuterDistance = candidates.Min(candidate => candidate.OuterDistanceTicks);
-            var maxWeakViolations = candidates.Max(candidate => candidate.WeakViolationCount);
-            var minWeakViolations = candidates.Min(candidate => candidate.WeakViolationCount);
-
             foreach (var candidate in candidates)
             {
                 var touchScore = Normalize(candidate.TouchCount, minTouches, maxTouches);
@@ -828,59 +787,17 @@ namespace Akode.TigerTrade.Indicators
                 var spanScore = Normalize(candidate.Span, minSpan, maxSpan);
                 var freshnessScore = Normalize(candidate.LastTouchIndex, minFreshness, maxFreshness);
                 var residualScore = 1.0 - Normalize(candidate.AverageResidualTicks, minResidual, maxResidual);
-                var slackScore = 1.0 - Normalize(candidate.EnvelopeSlackTicks, minSlack, maxSlack);
-                var outerScore = Normalize(candidate.OuterDistanceTicks, minOuterDistance, maxOuterDistance);
-                var consensusScore = 1.0 - Normalize(candidate.WeakViolationCount, minWeakViolations, maxWeakViolations);
 
-                switch (algorithm)
-                {
-                    case AkodeTrendlineAlgorithm.NearestPrice:
-                        candidate.SelectionScore = (0.60 * priceScore) +
-                                                   (0.20 * touchScore) +
-                                                   (0.10 * freshnessScore) +
-                                                   (0.10 * spanScore);
-                        break;
-                    case AkodeTrendlineAlgorithm.HigherTimeFrame:
-                        candidate.SelectionScore = (0.55 * timeframeScore) +
-                                                   (0.20 * touchScore) +
-                                                   (0.15 * priceScore) +
-                                                   (0.10 * freshnessScore);
-                        break;
-                    case AkodeTrendlineAlgorithm.HybridClean:
-                        candidate.SelectionScore = (0.35 * touchScore) +
-                                                   (0.25 * priceScore) +
-                                                   (0.25 * timeframeScore) +
-                                                   (0.10 * spanScore) +
-                                                   (0.05 * freshnessScore);
-                        break;
-                    case AkodeTrendlineAlgorithm.OuterEnvelope:
-                        candidate.SelectionScore = (0.40 * outerScore) +
-                                                   (0.25 * slackScore) +
-                                                   (0.20 * priceScore) +
-                                                   (0.10 * freshnessScore) +
-                                                   (0.05 * touchScore);
-                        break;
-                    case AkodeTrendlineAlgorithm.Consensus:
-                        candidate.SelectionScore = (0.40 * touchScore) +
-                                                   (0.25 * consensusScore) +
-                                                   (0.20 * residualScore) +
-                                                   (0.10 * freshnessScore) +
-                                                   (0.05 * priceScore);
-                        break;
-                    case AkodeTrendlineAlgorithm.WeightedRegression:
-                        candidate.SelectionScore = (0.35 * timeframeScore) +
-                                                   (0.25 * residualScore) +
-                                                   (0.20 * priceScore) +
-                                                   (0.10 * touchScore) +
-                                                   (0.10 * spanScore);
-                        break;
-                    default:
-                        candidate.SelectionScore = (0.55 * touchScore) +
-                                                   (0.20 * spanScore) +
-                                                   (0.15 * freshnessScore) +
-                                                   (0.10 * priceScore);
-                        break;
-                }
+                candidate.SelectionScore = algorithm == AkodeTrendlineAlgorithm.WeightedRegression
+                    ? (0.35 * timeframeScore) +
+                      (0.25 * residualScore) +
+                      (0.20 * priceScore) +
+                      (0.10 * touchScore) +
+                      (0.10 * spanScore)
+                    : (0.55 * touchScore) +
+                      (0.20 * spanScore) +
+                      (0.15 * freshnessScore) +
+                      (0.10 * priceScore);
             }
         }
 
@@ -903,184 +820,57 @@ namespace Akode.TigerTrade.Indicators
         {
             int result;
 
-            switch (algorithm)
+            if (algorithm == AkodeTrendlineAlgorithm.WeightedRegression)
             {
-                case AkodeTrendlineAlgorithm.NearestPrice:
-                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
+                result = CompareDescending(left.SelectionScore, right.SelectionScore);
+                if (result != 0)
+                {
+                    return result;
+                }
 
-                    result = CompareDescending(left.TouchCount, right.TouchCount);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
+                result = CompareAscending(left.AverageResidualTicks, right.AverageResidualTicks);
+                if (result != 0)
+                {
+                    return result;
+                }
 
-                    result = CompareDescending(left.LastTouchIndex, right.LastTouchIndex);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
+                result = CompareDescending(left.TimeframeTouchScore, right.TimeframeTouchScore);
+                if (result != 0)
+                {
+                    return result;
+                }
 
-                    result = CompareDescending(left.Span, right.Span);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
+                result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
+                if (result != 0)
+                {
+                    return result;
+                }
+            }
+            else
+            {
+                result = CompareDescending(left.TouchCount, right.TouchCount);
+                if (result != 0)
+                {
+                    return result;
+                }
 
-                    break;
-                case AkodeTrendlineAlgorithm.HigherTimeFrame:
-                    result = CompareDescending(left.TimeframeTouchScore, right.TimeframeTouchScore);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
+                result = CompareDescending(left.Span, right.Span);
+                if (result != 0)
+                {
+                    return result;
+                }
 
-                    result = CompareDescending(left.TouchCount, right.TouchCount);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
+                result = CompareDescending(left.LastTouchIndex, right.LastTouchIndex);
+                if (result != 0)
+                {
+                    return result;
+                }
 
-                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareDescending(left.LastTouchIndex, right.LastTouchIndex);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    break;
-                case AkodeTrendlineAlgorithm.HybridClean:
-                    result = CompareDescending(left.SelectionScore, right.SelectionScore);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareDescending(left.TouchCount, right.TouchCount);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    break;
-                case AkodeTrendlineAlgorithm.OuterEnvelope:
-                    result = CompareDescending(left.SelectionScore, right.SelectionScore);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareDescending(left.OuterDistanceTicks, right.OuterDistanceTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareAscending(left.EnvelopeSlackTicks, right.EnvelopeSlackTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    break;
-                case AkodeTrendlineAlgorithm.Consensus:
-                    result = CompareDescending(left.TouchCount, right.TouchCount);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareAscending(left.WeakViolationCount, right.WeakViolationCount);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareAscending(left.AverageResidualTicks, right.AverageResidualTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareDescending(left.LastTouchIndex, right.LastTouchIndex);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    break;
-                case AkodeTrendlineAlgorithm.WeightedRegression:
-                    result = CompareDescending(left.SelectionScore, right.SelectionScore);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareAscending(left.AverageResidualTicks, right.AverageResidualTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareDescending(left.TimeframeTouchScore, right.TimeframeTouchScore);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    break;
-                default:
-                    result = CompareDescending(left.TouchCount, right.TouchCount);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareDescending(left.Span, right.Span);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareDescending(left.LastTouchIndex, right.LastTouchIndex);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
-                    if (result != 0)
-                    {
-                        return result;
-                    }
-
-                    break;
+                result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
+                if (result != 0)
+                {
+                    return result;
+                }
             }
 
             result = CompareDescending(left.TimeframeTouchScore, right.TimeframeTouchScore);
