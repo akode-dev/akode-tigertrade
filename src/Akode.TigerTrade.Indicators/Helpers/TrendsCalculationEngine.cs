@@ -275,9 +275,22 @@ namespace Akode.TigerTrade.Indicators
 
             minTouches = Math.Max(2, minTouches);
 
-            var candidates = algorithm == AkodeTrendlineAlgorithm.WeightedRegression
-                ? BuildWeightedRegressionCandidates(orderedLevels, isHigh, enforceSlopeFilter, minTouches, tolerance, dataLength, currentPrice, priceStep)
-                : BuildPairCandidates(orderedLevels, isHigh, enforceSlopeFilter, minTouches, tolerance, dataLength, currentPrice, priceStep, algorithm);
+            List<TrendLineCandidate> candidates;
+            switch (algorithm)
+            {
+                case AkodeTrendlineAlgorithm.WeightedRegression:
+                    candidates = BuildWeightedRegressionCandidates(orderedLevels, isHigh, enforceSlopeFilter, minTouches, tolerance, dataLength, currentPrice, priceStep);
+                    break;
+                case AkodeTrendlineAlgorithm.Ransac:
+                    candidates = BuildRansacCandidates(orderedLevels, isHigh, enforceSlopeFilter, minTouches, tolerance, dataLength, currentPrice, priceStep);
+                    break;
+                case AkodeTrendlineAlgorithm.HoughTransform:
+                    candidates = BuildHoughTransformCandidates(orderedLevels, isHigh, enforceSlopeFilter, minTouches, tolerance, dataLength, currentPrice, priceStep);
+                    break;
+                default:
+                    candidates = BuildPairCandidates(orderedLevels, isHigh, enforceSlopeFilter, minTouches, tolerance, dataLength, currentPrice, priceStep, algorithm);
+                    break;
+            }
 
             if (hideBrokenTrendLines)
             {
@@ -496,6 +509,352 @@ namespace Akode.TigerTrade.Indicators
             }
 
             return candidates;
+        }
+
+        private static List<TrendLineCandidate> BuildRansacCandidates(
+            List<LevelLine> levels,
+            bool isHigh,
+            bool enforceSlopeFilter,
+            int minTouches,
+            double tolerance,
+            int dataLength,
+            double currentPrice,
+            double priceStep)
+        {
+            var candidates = new List<TrendLineCandidate>();
+
+            if (levels.Count < 2)
+            {
+                return candidates;
+            }
+
+            var seed = ComputeDeterministicSeed(levels);
+            var rng = new Random(seed);
+
+            var pairCount = levels.Count * (levels.Count - 1) / 2;
+            var maxIterations = Math.Min(200, pairCount);
+            maxIterations = Math.Max(maxIterations, 30);
+            var ransacViolationTolerance = Math.Max(tolerance * 2.0, tolerance + (3.0 * priceStep));
+
+            var usedPairs = new HashSet<long>();
+            var bestTouchCount = 0;
+            var consecutiveNoImprovement = 0;
+            var earlyStopThreshold = (int)(maxIterations * 0.4);
+
+            for (int iteration = 0; iteration < maxIterations; iteration++)
+            {
+                if (consecutiveNoImprovement > earlyStopThreshold)
+                {
+                    break;
+                }
+
+                var idx1 = rng.Next(levels.Count);
+                var idx2 = rng.Next(levels.Count);
+
+                if (idx1 == idx2)
+                {
+                    continue;
+                }
+
+                var lo = Math.Min(idx1, idx2);
+                var hi = Math.Max(idx1, idx2);
+                var pairKey = (long)lo * levels.Count + hi;
+
+                if (usedPairs.Contains(pairKey))
+                {
+                    continue;
+                }
+
+                usedPairs.Add(pairKey);
+
+                var first = levels[lo];
+                var second = levels[hi];
+
+                if (first.StartIndex == second.StartIndex)
+                {
+                    continue;
+                }
+
+                var slope = (second.Price - first.Price) / (second.StartIndex - first.StartIndex);
+
+                if (enforceSlopeFilter)
+                {
+                    if (isHigh && slope >= 0.0)
+                    {
+                        continue;
+                    }
+
+                    if (!isHigh && slope <= 0.0)
+                    {
+                        continue;
+                    }
+                }
+
+                var inlierCount = 0;
+                for (int k = 0; k < levels.Count; k++)
+                {
+                    if (levels[k].StartIndex < first.StartIndex)
+                    {
+                        continue;
+                    }
+
+                    var linePrice = first.Price + slope * (levels[k].StartIndex - first.StartIndex);
+                    var delta = Math.Abs(levels[k].Price - linePrice);
+
+                    if (delta <= tolerance)
+                    {
+                        inlierCount++;
+                    }
+                }
+
+                if (inlierCount < minTouches)
+                {
+                    continue;
+                }
+
+                var candidate = EvaluateLineCandidate(
+                    levels,
+                    isHigh,
+                    first.StartIndex,
+                    first.Price,
+                    slope,
+                    minTouches,
+                    tolerance,
+                    priceStep,
+                    first.StartIndex,
+                    true,
+                    ransacViolationTolerance);
+
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                PopulateCandidateMetrics(candidate, currentPrice, priceStep, dataLength);
+                candidates.Add(candidate);
+
+                if (candidate.TouchCount > bestTouchCount)
+                {
+                    bestTouchCount = candidate.TouchCount;
+                    consecutiveNoImprovement = 0;
+                }
+                else
+                {
+                    consecutiveNoImprovement++;
+                }
+            }
+
+            return candidates;
+        }
+
+        private static int ComputeDeterministicSeed(List<LevelLine> levels)
+        {
+            var hash = 17;
+            hash = hash * 31 + levels.Count;
+
+            if (levels.Count > 0)
+            {
+                hash = hash * 31 + levels[0].StartIndex;
+                hash = hash * 31 + (int)(levels[0].Price * 10000);
+                hash = hash * 31 + levels[levels.Count - 1].StartIndex;
+                hash = hash * 31 + (int)(levels[levels.Count - 1].Price * 10000);
+            }
+
+            return hash & 0x7FFFFFFF;
+        }
+
+        private static List<TrendLineCandidate> BuildHoughTransformCandidates(
+            List<LevelLine> levels,
+            bool isHigh,
+            bool enforceSlopeFilter,
+            int minTouches,
+            double tolerance,
+            int dataLength,
+            double currentPrice,
+            double priceStep)
+        {
+            var candidates = new List<TrendLineCandidate>();
+
+            if (levels.Count < 2)
+            {
+                return candidates;
+            }
+
+            var minIdx = levels[0].StartIndex;
+            var maxIdx = levels[0].StartIndex;
+            var minPrice = levels[0].Price;
+            var maxPrice = levels[0].Price;
+
+            for (int i = 1; i < levels.Count; i++)
+            {
+                if (levels[i].StartIndex < minIdx) minIdx = levels[i].StartIndex;
+                if (levels[i].StartIndex > maxIdx) maxIdx = levels[i].StartIndex;
+                if (levels[i].Price < minPrice) minPrice = levels[i].Price;
+                if (levels[i].Price > maxPrice) maxPrice = levels[i].Price;
+            }
+
+            var span = Math.Max(1, maxIdx - minIdx);
+            var priceRange = Math.Max(priceStep > 0.0 ? priceStep : 1.0, maxPrice - minPrice);
+            var referenceIndex = minIdx;
+
+            var slopeBinSize = tolerance / Math.Max(1.0, (double)span);
+            slopeBinSize = Math.Max(slopeBinSize, 0.5 * (priceStep > 0.0 ? priceStep : tolerance) / Math.Max(1.0, (double)span));
+
+            var interceptBinSize = Math.Max(tolerance, priceStep > 0.0 ? priceStep : tolerance);
+
+            var slopeMin = -priceRange / Math.Max(1.0, (double)span);
+            var slopeMax = priceRange / Math.Max(1.0, (double)span);
+
+            if (enforceSlopeFilter)
+            {
+                if (isHigh)
+                {
+                    slopeMax = -slopeBinSize;
+                }
+                else
+                {
+                    slopeMin = slopeBinSize;
+                }
+            }
+
+            if (slopeMin >= slopeMax)
+            {
+                return candidates;
+            }
+
+            var numSlopeBins = (int)Math.Ceiling((slopeMax - slopeMin) / slopeBinSize) + 1;
+            var numInterceptBins = (int)Math.Ceiling(priceRange / interceptBinSize) + 1;
+
+            const int maxTotalBins = 100000;
+            if ((long)numSlopeBins * numInterceptBins > maxTotalBins)
+            {
+                var scaleFactor = Math.Sqrt((double)((long)numSlopeBins * numInterceptBins) / maxTotalBins);
+                slopeBinSize *= scaleFactor;
+                interceptBinSize *= scaleFactor;
+                numSlopeBins = (int)Math.Ceiling((slopeMax - slopeMin) / slopeBinSize) + 1;
+                numInterceptBins = (int)Math.Ceiling(priceRange / interceptBinSize) + 1;
+            }
+
+            var interceptMin = minPrice;
+            var voteCount = new int[numSlopeBins, numInterceptBins];
+            var voteWeight = new double[numSlopeBins, numInterceptBins];
+
+            for (int li = 0; li < levels.Count; li++)
+            {
+                var level = levels[li];
+                for (int si = 0; si < numSlopeBins; si++)
+                {
+                    var slope = slopeMin + si * slopeBinSize;
+                    var intercept = level.Price - slope * (level.StartIndex - referenceIndex);
+                    var ii = (int)Math.Floor((intercept - interceptMin) / interceptBinSize);
+
+                    if (ii < 0 || ii >= numInterceptBins)
+                    {
+                        continue;
+                    }
+
+                    voteCount[si, ii]++;
+                    voteWeight[si, ii] += level.TimeframeWeight;
+                }
+            }
+
+            var peaks = new List<HoughPeak>();
+            for (int si = 0; si < numSlopeBins; si++)
+            {
+                for (int ii = 0; ii < numInterceptBins; ii++)
+                {
+                    if (voteCount[si, ii] >= minTouches)
+                    {
+                        peaks.Add(new HoughPeak(si, ii, voteCount[si, ii], voteWeight[si, ii]));
+                    }
+                }
+            }
+
+            peaks.Sort((a, b) =>
+            {
+                var cmp = b.Count.CompareTo(a.Count);
+                return cmp != 0 ? cmp : b.Weight.CompareTo(a.Weight);
+            });
+
+            var suppressed = new HashSet<long>();
+            var houghViolationTolerance = Math.Max(tolerance * 1.5, tolerance + (2.0 * priceStep));
+            var peakCount = 0;
+            const int maxPeaks = 50;
+
+            for (int pi = 0; pi < peaks.Count && peakCount < maxPeaks; pi++)
+            {
+                var peak = peaks[pi];
+                var peakKey = (long)peak.SlopeBin * numInterceptBins + peak.InterceptBin;
+
+                if (suppressed.Contains(peakKey))
+                {
+                    continue;
+                }
+
+                peakCount++;
+
+                for (int ds = -1; ds <= 1; ds++)
+                {
+                    for (int di = -1; di <= 1; di++)
+                    {
+                        if (ds == 0 && di == 0)
+                        {
+                            continue;
+                        }
+
+                        var ns = peak.SlopeBin + ds;
+                        var ni = peak.InterceptBin + di;
+
+                        if (ns >= 0 && ns < numSlopeBins && ni >= 0 && ni < numInterceptBins)
+                        {
+                            suppressed.Add((long)ns * numInterceptBins + ni);
+                        }
+                    }
+                }
+
+                var peakSlope = slopeMin + peak.SlopeBin * slopeBinSize;
+                var peakIntercept = interceptMin + peak.InterceptBin * interceptBinSize;
+                var startPrice = peakIntercept + peakSlope * (minIdx - referenceIndex);
+
+                var candidate = EvaluateLineCandidate(
+                    levels,
+                    isHigh,
+                    minIdx,
+                    startPrice,
+                    peakSlope,
+                    minTouches,
+                    tolerance,
+                    priceStep,
+                    minIdx,
+                    true,
+                    houghViolationTolerance);
+
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                PopulateCandidateMetrics(candidate, currentPrice, priceStep, dataLength);
+                candidates.Add(candidate);
+            }
+
+            return candidates;
+        }
+
+        private struct HoughPeak
+        {
+            public readonly int SlopeBin;
+            public readonly int InterceptBin;
+            public readonly int Count;
+            public readonly double Weight;
+
+            public HoughPeak(int slopeBin, int interceptBin, int count, double weight)
+            {
+                SlopeBin = slopeBin;
+                InterceptBin = interceptBin;
+                Count = count;
+                Weight = weight;
+            }
         }
 
         private static TrendLineCandidate EvaluateStrictCandidate(
@@ -788,16 +1147,40 @@ namespace Akode.TigerTrade.Indicators
                 var freshnessScore = Normalize(candidate.LastTouchIndex, minFreshness, maxFreshness);
                 var residualScore = 1.0 - Normalize(candidate.AverageResidualTicks, minResidual, maxResidual);
 
-                candidate.SelectionScore = algorithm == AkodeTrendlineAlgorithm.WeightedRegression
-                    ? (0.35 * timeframeScore) +
-                      (0.25 * residualScore) +
-                      (0.20 * priceScore) +
-                      (0.10 * touchScore) +
-                      (0.10 * spanScore)
-                    : (0.55 * touchScore) +
-                      (0.20 * spanScore) +
-                      (0.15 * freshnessScore) +
-                      (0.10 * priceScore);
+                switch (algorithm)
+                {
+                    case AkodeTrendlineAlgorithm.WeightedRegression:
+                        candidate.SelectionScore =
+                            (0.35 * timeframeScore) +
+                            (0.25 * residualScore) +
+                            (0.20 * priceScore) +
+                            (0.10 * touchScore) +
+                            (0.10 * spanScore);
+                        break;
+                    case AkodeTrendlineAlgorithm.Ransac:
+                        candidate.SelectionScore =
+                            (0.35 * touchScore) +
+                            (0.25 * residualScore) +
+                            (0.15 * priceScore) +
+                            (0.15 * timeframeScore) +
+                            (0.10 * spanScore);
+                        break;
+                    case AkodeTrendlineAlgorithm.HoughTransform:
+                        candidate.SelectionScore =
+                            (0.30 * timeframeScore) +
+                            (0.25 * residualScore) +
+                            (0.20 * touchScore) +
+                            (0.15 * priceScore) +
+                            (0.10 * spanScore);
+                        break;
+                    default:
+                        candidate.SelectionScore =
+                            (0.55 * touchScore) +
+                            (0.20 * spanScore) +
+                            (0.15 * freshnessScore) +
+                            (0.10 * priceScore);
+                        break;
+                }
             }
         }
 
@@ -820,57 +1203,51 @@ namespace Akode.TigerTrade.Indicators
         {
             int result;
 
-            if (algorithm == AkodeTrendlineAlgorithm.WeightedRegression)
+            switch (algorithm)
             {
-                result = CompareDescending(left.SelectionScore, right.SelectionScore);
-                if (result != 0)
-                {
-                    return result;
-                }
+                case AkodeTrendlineAlgorithm.WeightedRegression:
+                    result = CompareDescending(left.SelectionScore, right.SelectionScore);
+                    if (result != 0) return result;
+                    result = CompareAscending(left.AverageResidualTicks, right.AverageResidualTicks);
+                    if (result != 0) return result;
+                    result = CompareDescending(left.TimeframeTouchScore, right.TimeframeTouchScore);
+                    if (result != 0) return result;
+                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
+                    if (result != 0) return result;
+                    break;
 
-                result = CompareAscending(left.AverageResidualTicks, right.AverageResidualTicks);
-                if (result != 0)
-                {
-                    return result;
-                }
+                case AkodeTrendlineAlgorithm.Ransac:
+                    result = CompareDescending(left.TouchCount, right.TouchCount);
+                    if (result != 0) return result;
+                    result = CompareDescending(left.SelectionScore, right.SelectionScore);
+                    if (result != 0) return result;
+                    result = CompareAscending(left.AverageResidualTicks, right.AverageResidualTicks);
+                    if (result != 0) return result;
+                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
+                    if (result != 0) return result;
+                    break;
 
-                result = CompareDescending(left.TimeframeTouchScore, right.TimeframeTouchScore);
-                if (result != 0)
-                {
-                    return result;
-                }
+                case AkodeTrendlineAlgorithm.HoughTransform:
+                    result = CompareDescending(left.SelectionScore, right.SelectionScore);
+                    if (result != 0) return result;
+                    result = CompareDescending(left.TimeframeTouchScore, right.TimeframeTouchScore);
+                    if (result != 0) return result;
+                    result = CompareAscending(left.AverageResidualTicks, right.AverageResidualTicks);
+                    if (result != 0) return result;
+                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
+                    if (result != 0) return result;
+                    break;
 
-                result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
-                if (result != 0)
-                {
-                    return result;
-                }
-            }
-            else
-            {
-                result = CompareDescending(left.TouchCount, right.TouchCount);
-                if (result != 0)
-                {
-                    return result;
-                }
-
-                result = CompareDescending(left.Span, right.Span);
-                if (result != 0)
-                {
-                    return result;
-                }
-
-                result = CompareDescending(left.LastTouchIndex, right.LastTouchIndex);
-                if (result != 0)
-                {
-                    return result;
-                }
-
-                result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
-                if (result != 0)
-                {
-                    return result;
-                }
+                default:
+                    result = CompareDescending(left.TouchCount, right.TouchCount);
+                    if (result != 0) return result;
+                    result = CompareDescending(left.Span, right.Span);
+                    if (result != 0) return result;
+                    result = CompareDescending(left.LastTouchIndex, right.LastTouchIndex);
+                    if (result != 0) return result;
+                    result = CompareAscending(left.DistanceToCurrentPriceTicks, right.DistanceToCurrentPriceTicks);
+                    if (result != 0) return result;
+                    break;
             }
 
             result = CompareDescending(left.TimeframeTouchScore, right.TimeframeTouchScore);

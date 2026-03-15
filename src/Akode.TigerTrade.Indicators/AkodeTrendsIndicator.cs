@@ -783,6 +783,10 @@ namespace Akode.TigerTrade.Indicators
         [EnumMember(Value = "ClassicTouches"), Description("Classic Touches")]
         ClassicTouches,
         [EnumMember(Value = "WeightedRegression"), Description("Weighted Regression")]
-        WeightedRegression
+        WeightedRegression,
+        [EnumMember(Value = "Ransac"), Description("RANSAC")]
+        Ransac,
+        [EnumMember(Value = "HoughTransform"), Description("Hough Transform")]
+        HoughTransform
     }
 }
