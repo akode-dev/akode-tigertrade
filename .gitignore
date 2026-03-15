@@ -40,3 +40,4 @@ libs/*.dll
 # Optional temporary artifacts
 *.tmp
 *~
+.claude/plugins/akode
