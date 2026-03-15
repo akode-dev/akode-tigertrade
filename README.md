@@ -46,42 +46,76 @@ It supports aggregation to higher intervals, tracks broken levels, and limits vi
 
 Multi-profile support/resistance and trendline overlay.
 
-It combines up to five independent level-detection profiles inside one indicator,
-then builds shared upper/lower trend rays from the combined visible support and resistance levels.
+Essentially five `AkodeLevelsIndicator` instances combined into one indicator with a shared trendline engine on top. Each profile works independently (own timeframe, pivot settings, limits, styling), while the trendline algorithm uses their combined levels to draw diagonal support/resistance trend rays.
 
 #### Features
 
 - Up to 5 independent internal profiles in one indicator instance.
 - Per-profile timeframe, pivot sensitivity, body/wick mode, limits, broken-level handling, and display styles.
-- Horizontal levels rendered separately per profile.
-- Combined upper and lower trend rays built from all visible levels.
-- Multiple selectable trendline ranking modes: classic touches, nearest price, higher timeframe, hybrid clean, outer envelope, consensus, and weighted regression.
+- Per-profile toggle for trendline participation ("Include in trend lines").
+- Horizontal levels rendered separately per profile with cross-profile global filters.
+- Global level filters: max total lines, time-based filtering, and merge of nearby levels.
+- Combined upper and lower trend rays built from filtered visible levels.
+- Selectable trendline algorithms: Classic Touches, Weighted Regression, RANSAC, Hough Transform.
+- Trendline memory to prevent redrawing for configurable bars/time.
+- Trendline merge to deduplicate similar diagonal lines.
 - Independent slope filters for upper and lower trendlines.
-- Configurable cleanup for old support/resistance crossings.
 - Optional hiding of trendlines already broken by candle bodies.
 - Theme/template integration through TigerTrade indicator APIs.
 
-#### Settings
+#### Profile Settings (per profile)
 
 | Parameter | Default | Description |
 | --- | --- | --- |
-| Profile 1 | enabled | First internal levels profile. |
-| Profile 2-5 | disabled | Additional internal levels profiles. |
+| Enabled | Profile 1: true, others: false | Enable/disable the profile. |
+| Include in trend lines | true | Include this profile's levels in trendline calculation. |
+| Interval | Any Time Frame | Timeframe aggregation for pivot detection. |
+| Value | 1 | Multiplier for selected interval. |
+| Candles before | 2 | Bars to the left required for pivot confirmation. |
+| Candles after | 2 | Bars to the right required for pivot confirmation. |
+| Max High lines to show | 5 | Max active resistance levels for this profile. |
+| Max Low lines to show | 5 | Max active support levels for this profile. |
+| Use candle body instead of wicks | false | Use candle body (open/close) instead of wicks (high/low) for pivots. |
+| Show broken lines | false | Show levels that were breached by price. |
+| Max High lines (broken) | 2 | Max broken resistance levels for this profile. |
+| Max Low lines (broken) | 2 | Max broken support levels for this profile. |
+| High levels | Colored line | Style/color for resistance levels. |
+| Low levels | Colored line | Style/color for support levels. |
+
+#### Level Lines Settings (global)
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| Max total High levels | 0 | Max total resistance levels across all profiles. 0 = unlimited. |
+| Max total Low levels | 0 | Max total support levels across all profiles. 0 = unlimited. |
+| Time filter (minutes) | 0 | Only show levels whose pivots occurred within the last N minutes. 0 = disabled. |
+| Level merge (ticks) | 0 | Merge horizontal levels within N ticks of each other, keeping the strongest. 0 = disabled. |
+| Apply filters to trend lines | true | Whether global level filters also affect trendline input. |
+
+#### Trend Lines Settings
+
+| Parameter | Default | Description |
+| --- | --- | --- |
 | Show trend lines | true | Toggle shared trendline rendering. |
 | Max High trend lines | 3 | Max upper trend rays displayed. |
 | Max Low trend lines | 3 | Max lower trend rays displayed. |
 | Tolerance in ticks | 2 | Touch tolerance used when scoring trendlines. |
 | Min High touches | 2 | Minimum touches required for upper trendlines. |
 | Min Low touches | 2 | Minimum touches required for lower trendlines. |
-| Left padding bars | 3 | Extend trendlines a few bars to the left of the first touch. |
+| Left padding bars | 3 | Extend trendlines to the left of the first touch. |
 | Right padding bars | 20 | Extend trendlines into the empty chart area to the right. |
 | High: only down slope | true | Restrict upper trendlines to descending slope. |
 | Low: only up slope | true | Restrict lower trendlines to ascending slope. |
-| Trendline algorithm | Classic Touches | Select the ranking/cleanup mode for trendline candidates. |
-| Allowed past crossing bars | 5 | Allow upper/lower intersections only within the last N bars to the left of the current bar. |
+| Trendline algorithm | Classic Touches | Algorithm for trendline candidates: Classic Touches, Weighted Regression, RANSAC, Hough Transform. |
+| Allowed past crossing bars | 5 | Allow upper/lower intersections only within the last N bars. |
 | Hide broken trend lines | true | Hide trendlines already broken by candle bodies. |
-| Break bars | 2 | Total number of body-break bars after the first anchor point required to hide a trendline. |
+| Break bars | 2 | Body-break bars after the first anchor required to hide a trendline. |
 | Break tolerance in ticks | 2 | Extra tolerance beyond the trendline before a body-break counts. |
+| Memory (bars) | 0 | Lock trendlines for N new bars to prevent redrawing. 0 = disabled. |
+| Memory (minutes) | 0 | Lock trendlines for N minutes to prevent redrawing. 0 = disabled. |
+| Trend merge (ticks) | 0 | Merge similar diagonal trendlines within N ticks distance. 0 = disabled. |
+| High trends | Gray line | Style/color for upper trend rays. |
+| Low trends | Gray line | Style/color for lower trend rays. |
 
 More indicators can be added to this package over time.
 
