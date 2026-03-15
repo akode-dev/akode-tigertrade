@@ -46,39 +46,39 @@ namespace Akode.TigerTrade.Indicators
         private AkodeTrendsProfileSettings _profile4;
         private AkodeTrendsProfileSettings _profile5;
         private bool _showTrendLines = true;
-        private int _maxHighTrendLines = 3;
-        private int _maxLowTrendLines = 3;
-        private int _trendlineToleranceTicks = 2;
+        private int _maxHighTrendLines = 4;
+        private int _maxLowTrendLines = 4;
+        private int _trendlineToleranceTicks = 100;
         private int _minHighTrendlineTouches = 2;
         private int _minLowTrendlineTouches = 2;
-        private int _trendlineLeftPaddingBars = 3;
-        private int _trendlineRightPaddingBars = 20;
+        private int _trendlineLeftPaddingBars = 50;
+        private int _trendlineRightPaddingBars = 500;
         private bool _highSlopeFilterEnabled = true;
         private bool _lowSlopeFilterEnabled = true;
-        private AkodeTrendlineAlgorithm _trendlineAlgorithm = AkodeTrendlineAlgorithm.ClassicTouches;
+        private AkodeTrendlineAlgorithm _trendlineAlgorithm = AkodeTrendlineAlgorithm.Ransac;
         private int _allowedPastCrossingBars = 5;
         private bool _hideBrokenTrendLines = true;
-        private int _trendlineBreakBars = 2;
-        private int _trendlineBreakToleranceTicks = 2;
+        private int _trendlineBreakBars = 5;
+        private int _trendlineBreakToleranceTicks = 5;
         private ChartLine _highTrendSeries;
         private ChartLine _lowTrendSeries;
-        private int _maxTotalHighLevels;
-        private int _maxTotalLowLevels;
+        private int _maxTotalHighLevels = 7;
+        private int _maxTotalLowLevels = 7;
         private int _levelTimeFilterMinutes;
-        private int _levelMergeDistanceTicks;
+        private int _levelMergeDistanceTicks = 50;
         private bool _applyLevelFiltersToTrendlines = true;
         private int _trendlineMemoryBars;
         private int _trendlineMemoryMinutes;
-        private int _trendlineMergeTicks;
+        private int _trendlineMergeTicks = 100;
         private TrendsCalculationEngine.TrendSelectionResult _cachedTrendSelection;
         private int _cachedAtDataLength;
         private DateTime _cachedAtTime;
         private double _cachedFirstBarPrice;
-        private bool _showDistancePercentLabels;
+        private bool _showDistancePercentLabels = true;
         private bool _showBaseLine;
-        private int _baseLineToleranceTicks = 3;
+        private int _baseLineToleranceTicks = 10;
         private int _baseLineLookbackBars;
-        private int _baseLineLookbackMinutes;
+        private int _baseLineLookbackMinutes = 120;
         private ChartLine _baseLineSeries;
         private List<VisibleHorizontalLevel> _visibleHorizontalLevels;
 
@@ -760,19 +760,14 @@ namespace Akode.TigerTrade.Indicators
             InitializeTrendStyles();
             EnsureBaseLineSeries();
 
-            Profile1.HighSeries.Color = theme.GetNextColor();
-            Profile1.LowSeries.Color = theme.GetNextColor();
-            Profile2.HighSeries.Color = theme.GetNextColor();
-            Profile2.LowSeries.Color = theme.GetNextColor();
-            Profile3.HighSeries.Color = theme.GetNextColor();
-            Profile3.LowSeries.Color = theme.GetNextColor();
-            Profile4.HighSeries.Color = theme.GetNextColor();
-            Profile4.LowSeries.Color = theme.GetNextColor();
-            Profile5.HighSeries.Color = theme.GetNextColor();
-            Profile5.LowSeries.Color = theme.GetNextColor();
-            HighTrendSeries.Color = theme.GetNextColor();
-            LowTrendSeries.Color = theme.GetNextColor();
-            BaseLineSeries.Color = theme.GetNextColor();
+            Profile1.ApplyDisplayDefaults(1);
+            Profile2.ApplyDisplayDefaults(2);
+            Profile3.ApplyDisplayDefaults(3);
+            Profile4.ApplyDisplayDefaults(4);
+            Profile5.ApplyDisplayDefaults(5);
+            HighTrendSeries.CopyTheme(CreateDefaultTrendSeries(true));
+            LowTrendSeries.CopyTheme(CreateDefaultTrendSeries(false));
+            BaseLineSeries.CopyTheme(CreateDefaultBaseLineSeries());
 
             base.ApplyColors(theme);
         }
@@ -1035,9 +1030,9 @@ namespace Akode.TigerTrade.Indicators
         private void InitializeProfiles()
         {
             InitializeProfile(ref _profile1, 1, true);
-            InitializeProfile(ref _profile2, 2, false);
-            InitializeProfile(ref _profile3, 3, false);
-            InitializeProfile(ref _profile4, 4, false);
+            InitializeProfile(ref _profile2, 2, true);
+            InitializeProfile(ref _profile3, 3, true);
+            InitializeProfile(ref _profile4, 4, true);
             InitializeProfile(ref _profile5, 5, false);
         }
 
@@ -1048,8 +1043,7 @@ namespace Akode.TigerTrade.Indicators
         {
             if (profile == null)
             {
-                profile = new AkodeTrendsProfileSettings();
-                profile.Enabled = enabledByDefault;
+                profile = CreateDefaultProfile(profileIndex, enabledByDefault);
             }
 
             profile.EnsureInitialized(profileIndex);
@@ -1068,12 +1062,7 @@ namespace Akode.TigerTrade.Indicators
                 field.PropertyChanged -= HandleNestedSettingsChanged;
             }
 
-            field = value ?? new AkodeTrendsProfileSettings();
-
-            if (value == null)
-            {
-                field.Enabled = enabledByDefault;
-            }
+            field = value ?? CreateDefaultProfile(profileIndex, enabledByDefault);
 
             field.EnsureInitialized(profileIndex);
             field.PropertyChanged -= HandleNestedSettingsChanged;
@@ -1120,8 +1109,8 @@ namespace Akode.TigerTrade.Indicators
                 Style = XDashStyle.Solid,
                 Width = 2,
                 Color = isHigh
-                    ? XColor.FromArgb(180, 66, 66, 66)
-                    : XColor.FromArgb(180, 99, 99, 99)
+                    ? XColor.FromArgb(100, 0, 100, 0)
+                    : XColor.FromArgb(100, 148, 0, 211)
             };
         }
 
@@ -1131,7 +1120,7 @@ namespace Akode.TigerTrade.Indicators
             {
                 Style = XDashStyle.Solid,
                 Width = 3,
-                Color = XColor.FromArgb(200, 255, 193, 7)
+                Color = XColor.FromArgb(94, 139, 69, 19)
             };
         }
 
@@ -1585,6 +1574,52 @@ namespace Akode.TigerTrade.Indicators
                     : value == AkodeTrendlineAlgorithm.HoughTransform
                         ? AkodeTrendlineAlgorithm.HoughTransform
                         : AkodeTrendlineAlgorithm.ClassicTouches;
+        }
+
+        private static AkodeTrendsProfileSettings CreateDefaultProfile(
+            int profileIndex,
+            bool enabledByDefault)
+        {
+            var profile = new AkodeTrendsProfileSettings
+            {
+                Enabled = enabledByDefault,
+                IncludeInTrendlines = profileIndex != 5,
+                CandlesBefore = 2,
+                CandlesAfter = 2,
+                MaxLinesHigh = 5,
+                MaxLinesLow = 5,
+                UseCandleBodyInsteadOfWicks = false,
+                MaxBrokenLinesHigh = 2,
+                MaxBrokenLinesLow = 2,
+                ShowBrokenLines = false
+            };
+
+            switch (profileIndex)
+            {
+                case 1:
+                    profile.PeriodType = AkodeLevelsPeriodType.Hour;
+                    profile.PeriodValue = 4;
+                    break;
+                case 2:
+                    profile.PeriodType = AkodeLevelsPeriodType.Hour;
+                    profile.PeriodValue = 1;
+                    break;
+                case 3:
+                    profile.PeriodType = AkodeLevelsPeriodType.Minute;
+                    profile.PeriodValue = 15;
+                    break;
+                case 4:
+                    profile.PeriodType = AkodeLevelsPeriodType.Minute;
+                    profile.PeriodValue = 1;
+                    break;
+                default:
+                    profile.PeriodType = AkodeLevelsPeriodType.AnyTimeFrame;
+                    profile.PeriodValue = 1;
+                    break;
+            }
+
+            profile.EnsureInitialized(profileIndex);
+            return profile;
         }
 
         private ChartLine GetProfileStyle(int profileIndex, bool isHigh)
