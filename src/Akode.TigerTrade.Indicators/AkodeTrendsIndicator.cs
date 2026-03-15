@@ -44,6 +44,8 @@ namespace Akode.TigerTrade.Indicators
         private int _maxTotalHighLevels;
         private int _maxTotalLowLevels;
         private int _levelTimeFilterMinutes;
+        private int _levelMergeDistanceTicks;
+        private bool _applyLevelFiltersToTrendlines = true;
 
         [Browsable(false)]
         public override IndicatorCalculation Calculation
@@ -179,6 +181,42 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 _levelTimeFilterMinutes = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "LevelMergeDistanceTicks")]
+        [Category("Level lines"), DisplayName("Merge distance (ticks)")]
+        public int LevelMergeDistanceTicks
+        {
+            get { return _levelMergeDistanceTicks; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _levelMergeDistanceTicks)
+                {
+                    return;
+                }
+
+                _levelMergeDistanceTicks = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ApplyLevelFiltersToTrendlines")]
+        [Category("Level lines"), DisplayName("Apply filters to trend lines")]
+        public bool ApplyLevelFiltersToTrendlines
+        {
+            get { return _applyLevelFiltersToTrendlines; }
+            set
+            {
+                if (value == _applyLevelFiltersToTrendlines)
+                {
+                    return;
+                }
+
+                _applyLevelFiltersToTrendlines = value;
                 OnPropertyChanged();
             }
         }
@@ -535,6 +573,8 @@ namespace Akode.TigerTrade.Indicators
             MaxTotalHighLevels = source.MaxTotalHighLevels;
             MaxTotalLowLevels = source.MaxTotalLowLevels;
             LevelTimeFilterMinutes = source.LevelTimeFilterMinutes;
+            LevelMergeDistanceTicks = source.LevelMergeDistanceTicks;
+            ApplyLevelFiltersToTrendlines = source.ApplyLevelFiltersToTrendlines;
 
             ShowTrendLines = source.ShowTrendLines;
             MaxHighTrendLines = source.MaxHighTrendLines;
@@ -575,8 +615,10 @@ namespace Akode.TigerTrade.Indicators
             CollectProfileLevels(Profile4, 4, highLevels, lowLevels);
             CollectProfileLevels(Profile5, 5, highLevels, lowLevels);
 
-            var filteredHigh = ApplyLevelFilters(highLevels, true, dataLength);
-            var filteredLow = ApplyLevelFilters(lowLevels, false, dataLength);
+            var priceStep = DataProvider != null ? DataProvider.Step : 0.0;
+
+            var filteredHigh = ApplyLevelFilters(highLevels, true, dataLength, priceStep);
+            var filteredLow = ApplyLevelFilters(lowLevels, false, dataLength, priceStep);
 
             DrawFilteredHorizontalLines(filteredHigh, true, dataLength);
             DrawFilteredHorizontalLines(filteredLow, false, dataLength);
@@ -590,15 +632,18 @@ namespace Akode.TigerTrade.Indicators
                 ? Math.Max(0, TrendlineToleranceTicks) * DataProvider.Step
                 : 0.0;
             var currentPrice = Helper.Close[dataLength - 1];
-            var priceStep = DataProvider != null ? DataProvider.Step : 0.0;
             var breakTolerance = DataProvider != null
                 ? Math.Max(0, TrendlineBreakToleranceTicks) * DataProvider.Step
                 : 0.0;
             var bodyHigh = BuildBodyHigh(Helper.Open, Helper.Close);
             var bodyLow = BuildBodyLow(Helper.Open, Helper.Close);
+            var trendHighInput = FilterByTrendlineEligibility(
+                _applyLevelFiltersToTrendlines ? filteredHigh : highLevels);
+            var trendLowInput = FilterByTrendlineEligibility(
+                _applyLevelFiltersToTrendlines ? filteredLow : lowLevels);
             var selection = TrendsCalculationEngine.SelectTrendLines(
-                filteredHigh,
-                filteredLow,
+                trendHighInput,
+                trendLowInput,
                 TrendlineAlgorithm,
                 HighSlopeFilterEnabled,
                 LowSlopeFilterEnabled,
@@ -746,7 +791,8 @@ namespace Akode.TigerTrade.Indicators
         private List<TrendsCalculationEngine.LevelLine> ApplyLevelFilters(
             List<TrendsCalculationEngine.LevelLine> levels,
             bool isHigh,
-            int dataLength)
+            int dataLength,
+            double priceStep)
         {
             var filtered = new List<TrendsCalculationEngine.LevelLine>(levels);
 
@@ -759,6 +805,28 @@ namespace Akode.TigerTrade.Indicators
                 filtered.RemoveAll(level =>
                     level.StartIndex >= 0 && level.StartIndex < dataLength &&
                     DateTime.FromOADate(date[level.StartIndex]) < cutoff);
+            }
+
+            if (_levelMergeDistanceTicks > 0 && priceStep > 0.0 && filtered.Count > 1)
+            {
+                var mergeDistance = _levelMergeDistanceTicks * priceStep;
+
+                filtered.Sort((a, b) =>
+                {
+                    var cmp = b.TimeframeWeight.CompareTo(a.TimeframeWeight);
+                    return cmp != 0 ? cmp : b.StartIndex.CompareTo(a.StartIndex);
+                });
+
+                for (int i = 0; i < filtered.Count; i++)
+                {
+                    for (int j = filtered.Count - 1; j > i; j--)
+                    {
+                        if (Math.Abs(filtered[i].Price - filtered[j].Price) <= mergeDistance)
+                        {
+                            filtered.RemoveAt(j);
+                        }
+                    }
+                }
             }
 
             var maxTotal = isHigh ? _maxTotalHighLevels : _maxTotalLowLevels;
@@ -809,6 +877,29 @@ namespace Akode.TigerTrade.Indicators
                 case 5: return isHigh ? Profile5.HighSeries : Profile5.LowSeries;
                 default: return null;
             }
+        }
+
+        private AkodeTrendsProfileSettings GetProfile(int profileIndex)
+        {
+            switch (profileIndex)
+            {
+                case 1: return Profile1;
+                case 2: return Profile2;
+                case 3: return Profile3;
+                case 4: return Profile4;
+                case 5: return Profile5;
+                default: return null;
+            }
+        }
+
+        private List<TrendsCalculationEngine.LevelLine> FilterByTrendlineEligibility(
+            List<TrendsCalculationEngine.LevelLine> levels)
+        {
+            return levels.FindAll(level =>
+            {
+                var profile = GetProfile(level.ProfileIndex);
+                return profile == null || profile.IncludeInTrendlines;
+            });
         }
 
         private void DrawTrendLines(

@@ -47,6 +47,7 @@ namespace Akode.TigerTrade.Indicators
         private int _maxBrokenLinesHigh;
         private int _maxBrokenLinesLow;
         private bool _showBrokenLines;
+        private bool _includeInTrendlines = true;
         private ChartLine _highSeries;
         private ChartLine _lowSeries;
         private int _profileIndex;
@@ -78,6 +79,23 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 _enabled = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "IncludeInTrendlines")]
+        [Category("Profile"), DisplayName("Include in trend lines")]
+        public bool IncludeInTrendlines
+        {
+            get { return _includeInTrendlines; }
+            set
+            {
+                if (value == _includeInTrendlines)
+                {
+                    return;
+                }
+
+                _includeInTrendlines = value;
                 OnPropertyChanged();
             }
         }
@@ -318,6 +336,7 @@ namespace Akode.TigerTrade.Indicators
             }
 
             Enabled = other.Enabled;
+            IncludeInTrendlines = other.IncludeInTrendlines;
             PeriodType = other.PeriodType;
             PeriodValue = other.PeriodValue;
             CandlesBefore = other.CandlesBefore;
