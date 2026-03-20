@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Windows;
 using TigerTrade.Chart.Base;
 using TigerTrade.Chart.Base.Enums;
 using TigerTrade.Chart.Indicators.Common;
@@ -100,6 +101,26 @@ namespace Akode.TigerTrade.Indicators
         [Category("Broken lines"), DisplayName("Show broken lines")]
         public bool ShowBrokenLines { get; set; } = true;
 
+        [DataMember(Name = "ShowTestedLines"), DefaultValue(true)]
+        [Category("Tested lines"), DisplayName("Show tested lines")]
+        public bool ShowTestedLines { get; set; } = true;
+
+        [DataMember(Name = "MaxTestedLinesHigh"), DefaultValue(1)]
+        [Category("Tested lines"), DisplayName("Max High lines (tested)")]
+        public int MaxTestedLinesHigh { get; set; } = 1;
+
+        [DataMember(Name = "MaxTestedLinesLow"), DefaultValue(1)]
+        [Category("Tested lines"), DisplayName("Max Low lines (tested)")]
+        public int MaxTestedLinesLow { get; set; } = 1;
+
+        [DataMember(Name = "TestedHighSeries")]
+        [Category("Tested lines"), DisplayName("Tested High levels")]
+        public ChartLine TestedHighSeries { get; set; }
+
+        [DataMember(Name = "TestedLowSeries")]
+        [Category("Tested lines"), DisplayName("Tested Low levels")]
+        public ChartLine TestedLowSeries { get; set; }
+
         [DataMember(Name = "HighLineColor")]
         [Category("Display"), DisplayName("High levels")]
         public ChartLine HighSeries { get; set; }
@@ -108,12 +129,50 @@ namespace Akode.TigerTrade.Indicators
         [Category("Display"), DisplayName("Low levels")]
         public ChartLine LowSeries { get; set; }
 
+        [DataMember(Name = "HighlightRoundLevels"), DefaultValue(false)]
+        [Category("Round levels"), DisplayName("Highlight round levels")]
+        public bool HighlightRoundLevels { get; set; }
+
+        [DataMember(Name = "RoundLevelStep"), DefaultValue(0.0)]
+        [Category("Round levels"), DisplayName("Round step")]
+        public double RoundLevelStep { get; set; }
+
+        [DataMember(Name = "RoundLevelToleranceTicks"), DefaultValue(0)]
+        [Category("Round levels"), DisplayName("Round tolerance (ticks)")]
+        public int RoundLevelToleranceTicks { get; set; }
+
+        [DataMember(Name = "RoundHighSeries")]
+        [Category("Round levels"), DisplayName("Round High levels")]
+        public ChartLine RoundHighSeries { get; set; }
+
+        [DataMember(Name = "RoundLowSeries")]
+        [Category("Round levels"), DisplayName("Round Low levels")]
+        public ChartLine RoundLowSeries { get; set; }
+
+        [DataMember(Name = "ShowDistancePercentLabels"), DefaultValue(false)]
+        [Category("Display"), DisplayName("Show distance % labels")]
+        public bool ShowDistancePercentLabels { get; set; }
+
         private struct LevelLine
         {
             public double Price;
             public int StartIndex;
             public bool IsBroken;
+            public bool IsTested;
         }
+
+        private struct VisibleLevel
+        {
+            public double Price;
+            public bool IsHigh;
+            public XColor Color;
+        }
+
+        private const int MaxDistanceLabelsPerSide = 10;
+        private const double LabelPadding = 6.0;
+        private const double LabelLineGap = 4.0;
+        private const double LabelSpacing = 2.0;
+        private List<VisibleLevel> _visibleLevels;
 
         private class TimeFrameBar
         {
@@ -130,31 +189,79 @@ namespace Akode.TigerTrade.Indicators
         public AkodeLevelsIndicator() { InitializeStyles(); }
 
         [OnDeserialized]
-        private void OnDeserialized(StreamingContext context) 
-        { 
-            if (HighSeries == null || LowSeries == null) InitializeStyles(); 
+        private void OnDeserialized(StreamingContext context)
+        {
+            if (HighSeries == null || LowSeries == null) InitializeStyles();
+            if (RoundHighSeries == null || RoundLowSeries == null) InitializeRoundStyles();
+            if (TestedHighSeries == null || TestedLowSeries == null) InitializeTestedStyles();
         }
 
         private void InitializeStyles()
         {
-            HighSeries = new ChartLine 
-            { 
-                Style = XDashStyle.Solid, 
-                Width = 1, 
-                Color = XColor.FromArgb(100, 8, 153, 129) 
+            HighSeries = new ChartLine
+            {
+                Style = XDashStyle.Solid,
+                Width = 1,
+                Color = XColor.FromArgb(100, 8, 153, 129)
             };
 
-            LowSeries = new ChartLine 
-            { 
-                Style = XDashStyle.Solid, 
-                Width = 1, 
-                Color = XColor.FromArgb(100, 247, 82, 95) 
+            LowSeries = new ChartLine
+            {
+                Style = XDashStyle.Solid,
+                Width = 1,
+                Color = XColor.FromArgb(100, 247, 82, 95)
+            };
+
+            InitializeRoundStyles();
+            InitializeTestedStyles();
+        }
+
+        private void InitializeRoundStyles()
+        {
+            RoundHighSeries = new ChartLine
+            {
+                Style = XDashStyle.Solid,
+                Width = 2,
+                Color = XColor.FromArgb(200, 218, 165, 32)
+            };
+
+            RoundLowSeries = new ChartLine
+            {
+                Style = XDashStyle.Solid,
+                Width = 2,
+                Color = XColor.FromArgb(200, 218, 165, 32)
             };
         }
+
+        private void InitializeTestedStyles()
+        {
+            TestedHighSeries = new ChartLine
+            {
+                Style = XDashStyle.Dash,
+                Width = 1,
+                Color = XColor.FromArgb(100, 8, 153, 129)
+            };
+
+            TestedLowSeries = new ChartLine
+            {
+                Style = XDashStyle.Dash,
+                Width = 1,
+                Color = XColor.FromArgb(100, 247, 82, 95)
+            };
+        }
+
         public override void ApplyColors(IChartTheme theme)
         {
             HighSeries.Color = theme.GetNextColor();
             LowSeries.Color = theme.GetNextColor();
+
+            if (RoundHighSeries == null || RoundLowSeries == null) InitializeRoundStyles();
+            RoundHighSeries.Color = XColor.FromArgb(200, 218, 165, 32);
+            RoundLowSeries.Color = XColor.FromArgb(200, 218, 165, 32);
+
+            if (TestedHighSeries == null || TestedLowSeries == null) InitializeTestedStyles();
+            TestedHighSeries.Color = XColor.FromArgb(100, 8, 153, 129);
+            TestedLowSeries.Color = XColor.FromArgb(100, 247, 82, 95);
 
             base.ApplyColors(theme);
         }
@@ -189,11 +296,31 @@ namespace Akode.TigerTrade.Indicators
                 LowSeries.CopyTheme(i.LowSeries);
             }
 
+            ShowDistancePercentLabels = i.ShowDistancePercentLabels;
+            ShowTestedLines = i.ShowTestedLines;
+            MaxTestedLinesHigh = i.MaxTestedLinesHigh;
+            MaxTestedLinesLow = i.MaxTestedLinesLow;
+
+            if (TestedHighSeries == null || TestedLowSeries == null) InitializeTestedStyles();
+            if (i.TestedHighSeries != null) TestedHighSeries.CopyTheme(i.TestedHighSeries);
+            if (i.TestedLowSeries != null) TestedLowSeries.CopyTheme(i.TestedLowSeries);
+
+            HighlightRoundLevels = i.HighlightRoundLevels;
+            RoundLevelStep = i.RoundLevelStep;
+            RoundLevelToleranceTicks = i.RoundLevelToleranceTicks;
+
+            if (RoundHighSeries == null || RoundLowSeries == null) InitializeRoundStyles();
+            if (i.RoundHighSeries != null) RoundHighSeries.CopyTheme(i.RoundHighSeries);
+            if (i.RoundLowSeries != null) RoundLowSeries.CopyTheme(i.RoundLowSeries);
+
             base.CopyTemplate(indicator, style);
         }
 
         protected override void Execute()
         {
+            if (_visibleLevels == null) _visibleLevels = new List<VisibleLevel>();
+            _visibleLevels.Clear();
+
             var dataLength = Helper.Count;
             if (dataLength < CandlesBefore + CandlesAfter + 1) return;
 
@@ -225,8 +352,20 @@ namespace Akode.TigerTrade.Indicators
             var orderedHighPivots = highPivots.OrderByDescending(p => p.StartIndex);
             var orderedLowPivots = lowPivots.OrderByDescending(p => p.StartIndex);
 
-            var finalHighs = orderedHighPivots.Where(p => !p.IsBroken).Take(MaxLinesHigh).ToList();
-            var finalLows = orderedLowPivots.Where(p => !p.IsBroken).Take(MaxLinesLow).ToList();
+            var finalHighs = orderedHighPivots.Where(p => !p.IsBroken && !p.IsTested).Take(MaxLinesHigh).ToList();
+            var finalLows = orderedLowPivots.Where(p => !p.IsBroken && !p.IsTested).Take(MaxLinesLow).ToList();
+
+            if (ShowTestedLines)
+            {
+                if (MaxTestedLinesHigh > 0)
+                {
+                    finalHighs.AddRange(orderedHighPivots.Where(p => p.IsTested).Take(MaxTestedLinesHigh));
+                }
+                if (MaxTestedLinesLow > 0)
+                {
+                    finalLows.AddRange(orderedLowPivots.Where(p => p.IsTested).Take(MaxTestedLinesLow));
+                }
+            }
 
             if (ShowBrokenLines)
             {
@@ -243,8 +382,8 @@ namespace Akode.TigerTrade.Indicators
             var finalHighsBuffer = ToCircularBuffer(finalHighs);
             var finalLowsBuffer = ToCircularBuffer(finalLows);
 
-            DrawLines(finalHighsBuffer, HighSeries, dataLength);
-            DrawLines(finalLowsBuffer, LowSeries, dataLength);
+            DrawLines(finalHighsBuffer, HighSeries, true, dataLength);
+            DrawLines(finalLowsBuffer, LowSeries, false, dataLength);
         }
 
         private List<TimeFrameBar> BuildOnTimeframe(double[] date, double[] high, double[] low)
@@ -315,8 +454,9 @@ namespace Akode.TigerTrade.Indicators
                 if (isPivot)
                 {
                     int startIndex = isHigh ? centralBar.HighIndex : centralBar.LowIndex;
-                    bool isBroken = IsBroken(startIndex, pivotPrice, originalPrices, isHigh);
-                    pivots.Add(new LevelLine { Price = pivotPrice, StartIndex = startIndex, IsBroken = isBroken });
+                    bool isBroken, isTested;
+                    ClassifyLevel(startIndex, pivotPrice, originalPrices, Helper.Close, isHigh, out isBroken, out isTested);
+                    pivots.Add(new LevelLine { Price = pivotPrice, StartIndex = startIndex, IsBroken = isBroken, IsTested = isTested });
                 }
             }
             return pivots;
@@ -340,20 +480,35 @@ namespace Akode.TigerTrade.Indicators
                 }
                 if (isPivot)
                 {
-                    bool isBroken = IsBroken(i, price, prices, isHigh);
-                    pivots.Add(new LevelLine { Price = price, StartIndex = i, IsBroken = isBroken });
+                    bool isBroken, isTested;
+                    ClassifyLevel(i, price, prices, Helper.Close, isHigh, out isBroken, out isTested);
+                    pivots.Add(new LevelLine { Price = price, StartIndex = i, IsBroken = isBroken, IsTested = isTested });
                 }
             }
             return pivots;
         }
 
-        private bool IsBroken(int startIndex, double price, double[] prices, bool isHighLevel)
+        private static void ClassifyLevel(int startIndex, double price,
+            double[] wickPrices, double[] closePrices, bool isHigh,
+            out bool isBroken, out bool isTested)
         {
-            for (int k = startIndex + 1; k < prices.Length; k++)
+            isBroken = false;
+            isTested = false;
+
+            for (int k = startIndex + 1; k < closePrices.Length; k++)
             {
-                if (isHighLevel ? prices[k] > price : prices[k] < price) return true;
+                if (isHigh ? closePrices[k] > price : closePrices[k] < price)
+                {
+                    isBroken = true;
+                    isTested = false;
+                    return;
+                }
+
+                if (!isTested && (isHigh ? wickPrices[k] > price : wickPrices[k] < price))
+                {
+                    isTested = true;
+                }
             }
-            return false;
         }
 
         private CircularBuffer<LevelLine> ToCircularBuffer(List<LevelLine> levels)
@@ -368,32 +523,220 @@ namespace Akode.TigerTrade.Indicators
             return buffer;
         }
 
-        private void DrawLines(CircularBuffer<LevelLine> lines, ChartLine baseStyle, int dataLength)
+        private void DrawLines(CircularBuffer<LevelLine> lines, ChartLine baseStyle, bool isHigh, int dataLength)
         {
+            var priceStep = DataProvider != null ? DataProvider.Step : 0.0;
+
             foreach (var line in lines)
             {
-                if (line.IsBroken && !ShowBrokenLines) 
-                    continue; 
-                
+                if (line.IsBroken && !ShowBrokenLines)
+                    continue;
+                if (line.IsTested && !ShowTestedLines)
+                    continue;
+
+                var style = baseStyle;
+
+                if (Helpers.RoundPriceHelper.IsRoundPrice(line.Price, priceStep, HighlightRoundLevels, RoundLevelStep, RoundLevelToleranceTicks))
+                {
+                    style = isHigh ? RoundHighSeries : RoundLowSeries;
+                }
+                else if (line.IsTested)
+                {
+                    style = isHigh ? TestedHighSeries : TestedLowSeries;
+                }
+
                 var data = new double[dataLength];
                 for (int i = 0; i < data.Length; i++) data[i] = double.NaN;
                 for (int i = line.StartIndex; i < dataLength; i++) data[i] = line.Price;
-                
+
+                var dashStyle = line.IsBroken ? XDashStyle.Dot : line.IsTested ? XDashStyle.Dash : style.Style;
                 var lineStyle = new ChartLine
                 {
-                    Color = baseStyle.Color,
-                    Width = baseStyle.Width,
-                    Style = line.IsBroken ? XDashStyle.Dot : baseStyle.Style
+                    Color = style.Color,
+                    Width = style.Width,
+                    Style = dashStyle
                 };
-                
-                Series.Add(new IndicatorSeriesData(data, lineStyle) 
-                { 
-                    Style = 
-                    { 
-                        DisableMinMax = true 
-                    } 
+
+                if (lineStyle.Visible)
+                {
+                    _visibleLevels.Add(new VisibleLevel
+                    {
+                        Price = line.Price,
+                        IsHigh = isHigh,
+                        Color = lineStyle.Color
+                    });
+                }
+
+                Series.Add(new IndicatorSeriesData(data, lineStyle)
+                {
+                    Style =
+                    {
+                        DisableMinMax = true
+                    }
                 });
             }
+        }
+
+        public override void Render(DxVisualQueue visual)
+        {
+            if (_visibleLevels == null) _visibleLevels = new List<VisibleLevel>();
+
+            if (!ShowDistancePercentLabels || _visibleLevels.Count == 0 || Canvas == null)
+            {
+                return;
+            }
+
+            var currentPrice = GetCurrentReferencePrice();
+            if (double.IsNaN(currentPrice) || double.IsInfinity(currentPrice) || Math.Abs(currentPrice) < double.Epsilon)
+            {
+                return;
+            }
+
+            DrawDistanceLabels(visual, currentPrice, true);
+            DrawDistanceLabels(visual, currentPrice, false);
+        }
+
+        private void DrawDistanceLabels(DxVisualQueue visual, double currentPrice, bool highSide)
+        {
+            var candidates = new List<KeyValuePair<VisibleLevel, double>>();
+
+            for (int i = 0; i < _visibleLevels.Count; i++)
+            {
+                var level = _visibleLevels[i];
+                if (level.IsHigh != highSide || !IsLevelInViewport(level.Price))
+                {
+                    continue;
+                }
+
+                var distance = level.Price - currentPrice;
+                if (highSide ? distance <= 0.0 : distance >= 0.0)
+                {
+                    continue;
+                }
+
+                candidates.Add(new KeyValuePair<VisibleLevel, double>(level, Math.Abs(distance)));
+            }
+
+            if (candidates.Count == 0)
+            {
+                return;
+            }
+
+            candidates.Sort(delegate (KeyValuePair<VisibleLevel, double> a, KeyValuePair<VisibleLevel, double> b)
+            {
+                return a.Value.CompareTo(b.Value);
+            });
+
+            var font = Canvas.ChartFont;
+            var acceptedRects = new List<Rect>(MaxDistanceLabelsPerSide);
+            var chartRect = Canvas.Rect;
+            var acceptedCount = 0;
+
+            for (int i = 0; i < candidates.Count && acceptedCount < MaxDistanceLabelsPerSide; i++)
+            {
+                var text = FormatDistancePercent(candidates[i].Key.Price, currentPrice);
+                if (string.IsNullOrEmpty(text))
+                {
+                    continue;
+                }
+
+                var size = font.GetSize(text);
+                var lineY = GetY(candidates[i].Key.Price);
+                var x = chartRect.Right - size.Width - LabelPadding;
+                var y = lineY - size.Height - LabelLineGap;
+
+                if (x < chartRect.Left + LabelPadding)
+                {
+                    x = chartRect.Left + LabelPadding;
+                }
+
+                if (y < chartRect.Top)
+                {
+                    y = lineY + LabelLineGap;
+                }
+
+                if (y > chartRect.Bottom - size.Height)
+                {
+                    y = chartRect.Bottom - size.Height;
+                }
+
+                if (y < chartRect.Top)
+                {
+                    y = chartRect.Top;
+                }
+
+                var labelRect = new Rect(x, y, size.Width, size.Height);
+                var overlaps = false;
+
+                for (int j = 0; j < acceptedRects.Count; j++)
+                {
+                    if (labelRect.Bottom > acceptedRects[j].Top - LabelSpacing &&
+                        labelRect.Top < acceptedRects[j].Bottom + LabelSpacing)
+                    {
+                        overlaps = true;
+                        break;
+                    }
+                }
+
+                if (overlaps)
+                {
+                    continue;
+                }
+
+                acceptedRects.Add(labelRect);
+                visual.DrawString(text, font, new XBrush(candidates[i].Key.Color), labelRect);
+                acceptedCount++;
+            }
+        }
+
+        private double GetCurrentReferencePrice()
+        {
+            if (DataProvider != null)
+            {
+                var security = DataProvider.GetSecurity();
+                if (security != null)
+                {
+                    var lastPrice = (double)security.LastPrice;
+                    if (lastPrice > 0.0)
+                    {
+                        return lastPrice;
+                    }
+                }
+            }
+
+            if (Helper != null && Helper.Count > 0)
+            {
+                var closePrice = Helper.Close[Helper.Count - 1];
+                if (closePrice > 0.0)
+                {
+                    return closePrice;
+                }
+            }
+
+            return double.NaN;
+        }
+
+        private bool IsLevelInViewport(double price)
+        {
+            if (Canvas == null)
+            {
+                return false;
+            }
+
+            var y = GetY(price);
+            var rect = Canvas.Rect;
+            return y >= rect.Top && y <= rect.Bottom;
+        }
+
+        private static string FormatDistancePercent(double levelPrice, double currentPrice)
+        {
+            var percent = ((levelPrice - currentPrice) / currentPrice) * 100.0;
+            if (double.IsNaN(percent) || double.IsInfinity(percent))
+            {
+                return null;
+            }
+
+            return percent.ToString("+0.00;-0.00;0.00") + "%";
         }
     }
 

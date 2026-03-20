@@ -51,6 +51,7 @@
     <Compile Include="AkodeTrendsProfileSettings.cs" />
     <Compile Include="AkodeLevelsIndicator.cs" />
     <Compile Include="Helpers\CircularBuffer.cs" />
+    <Compile Include="Helpers\RoundPriceHelper.cs" />
     <Compile Include="Helpers\TrendsCalculationEngine.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

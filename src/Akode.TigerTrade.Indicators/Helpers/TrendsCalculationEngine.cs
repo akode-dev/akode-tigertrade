@@ -15,6 +15,7 @@ namespace Akode.TigerTrade.Indicators
             public double Price;
             public int StartIndex;
             public bool IsBroken;
+            public bool IsTested;
             public int ProfileIndex;
             public ChartPeriodType TimeframeType;
             public int TimeframeInterval;
@@ -148,10 +149,12 @@ namespace Akode.TigerTrade.Indicators
             List<LevelLine> highPivots;
             List<LevelLine> lowPivots;
 
+            var closePrices = helper.Close;
+
             if (settings.PeriodType == AkodeLevelsPeriodType.AnyTimeFrame)
             {
-                highPivots = FindPivotsInCurrentData(highSource, true, candlesBefore, candlesAfter);
-                lowPivots = FindPivotsInCurrentData(lowSource, false, candlesBefore, candlesAfter);
+                highPivots = FindPivotsInCurrentData(highSource, closePrices, true, candlesBefore, candlesAfter);
+                lowPivots = FindPivotsInCurrentData(lowSource, closePrices, false, candlesBefore, candlesAfter);
             }
             else
             {
@@ -161,8 +164,8 @@ namespace Akode.TigerTrade.Indicators
                     return ProfileLevelsResult.Empty;
                 }
 
-                highPivots = FindPivotsInTimeFrameData(bars, highSource, true, candlesBefore, candlesAfter);
-                lowPivots = FindPivotsInTimeFrameData(bars, lowSource, false, candlesBefore, candlesAfter);
+                highPivots = FindPivotsInTimeFrameData(bars, highSource, closePrices, true, candlesBefore, candlesAfter);
+                lowPivots = FindPivotsInTimeFrameData(bars, lowSource, closePrices, false, candlesBefore, candlesAfter);
             }
 
             ChartPeriodType timeframeType;
@@ -175,61 +178,6 @@ namespace Akode.TigerTrade.Indicators
             return new ProfileLevelsResult(
                 FinalizeLevels(highPivots, true, settings),
                 FinalizeLevels(lowPivots, false, settings));
-        }
-
-        public static List<LevelLine> CalculateAllRawPivots(
-            IndicatorsHelper helper,
-            IChartDataProvider dataProvider,
-            AkodeTrendsProfileSettings settings,
-            int profileIndex)
-        {
-            var candlesBefore = Math.Max(0, settings.CandlesBefore);
-            var candlesAfter = Math.Max(0, settings.CandlesAfter);
-            var minBars = candlesBefore + candlesAfter + 1;
-
-            if (helper.Count < minBars)
-            {
-                return new List<LevelLine>();
-            }
-
-            var highSource = settings.UseCandleBodyInsteadOfWicks
-                ? BuildBodyHigh(helper.Open, helper.Close)
-                : helper.High;
-            var lowSource = settings.UseCandleBodyInsteadOfWicks
-                ? BuildBodyLow(helper.Open, helper.Close)
-                : helper.Low;
-
-            List<LevelLine> highPivots;
-            List<LevelLine> lowPivots;
-
-            if (settings.PeriodType == AkodeLevelsPeriodType.AnyTimeFrame)
-            {
-                highPivots = FindPivotsInCurrentData(highSource, true, candlesBefore, candlesAfter);
-                lowPivots = FindPivotsInCurrentData(lowSource, false, candlesBefore, candlesAfter);
-            }
-            else
-            {
-                var bars = BuildOnTimeframe(helper.Date, highSource, lowSource, dataProvider, settings);
-                if (bars.Count < minBars)
-                {
-                    return new List<LevelLine>();
-                }
-
-                highPivots = FindPivotsInTimeFrameData(bars, highSource, true, candlesBefore, candlesAfter);
-                lowPivots = FindPivotsInTimeFrameData(bars, lowSource, false, candlesBefore, candlesAfter);
-            }
-
-            ChartPeriodType timeframeType;
-            int timeframeInterval;
-            var timeframeWeight = ResolveTimeframeWeight(settings, dataProvider, out timeframeType, out timeframeInterval);
-
-            ApplyLevelMetadata(highPivots, profileIndex, timeframeType, timeframeInterval, timeframeWeight);
-            ApplyLevelMetadata(lowPivots, profileIndex, timeframeType, timeframeInterval, timeframeWeight);
-
-            var all = new List<LevelLine>(highPivots.Count + lowPivots.Count);
-            all.AddRange(highPivots);
-            all.AddRange(lowPivots);
-            return all;
         }
 
         public static TrendSelectionResult SelectTrendLines(
@@ -1742,14 +1690,24 @@ namespace Akode.TigerTrade.Indicators
             var activeLimit = isHigh
                 ? Math.Max(0, settings.MaxLinesHigh)
                 : Math.Max(0, settings.MaxLinesLow);
+            var testedLimit = isHigh
+                ? Math.Max(0, settings.MaxTestedLinesHigh)
+                : Math.Max(0, settings.MaxTestedLinesLow);
             var brokenLimit = isHigh
                 ? Math.Max(0, settings.MaxBrokenLinesHigh)
                 : Math.Max(0, settings.MaxBrokenLinesLow);
 
             var levels = orderedPivots
-                .Where(pivot => !pivot.IsBroken)
+                .Where(pivot => !pivot.IsBroken && !pivot.IsTested)
                 .Take(activeLimit)
                 .ToList();
+
+            if (settings.ShowTestedLines && testedLimit > 0)
+            {
+                levels.AddRange(orderedPivots
+                    .Where(pivot => pivot.IsTested)
+                    .Take(testedLimit));
+            }
 
             if (settings.ShowBrokenLines && brokenLimit > 0)
             {
@@ -1821,6 +1779,7 @@ namespace Akode.TigerTrade.Indicators
         private static List<LevelLine> FindPivotsInTimeFrameData(
             List<TimeFrameBar> bars,
             double[] originalPrices,
+            double[] closePrices,
             bool isHigh,
             int candlesBefore,
             int candlesAfter)
@@ -1854,13 +1813,15 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 var startIndex = isHigh ? centralBar.HighIndex : centralBar.LowIndex;
-                var isBroken = IsBroken(startIndex, pivotPrice, originalPrices, isHigh);
+                bool isBroken, isTested;
+                ClassifyLevel(startIndex, pivotPrice, originalPrices, closePrices, isHigh, out isBroken, out isTested);
 
                 pivots.Add(new LevelLine
                 {
                     Price = pivotPrice,
                     StartIndex = startIndex,
-                    IsBroken = isBroken
+                    IsBroken = isBroken,
+                    IsTested = isTested
                 });
             }
 
@@ -1869,6 +1830,7 @@ namespace Akode.TigerTrade.Indicators
 
         private static List<LevelLine> FindPivotsInCurrentData(
             double[] prices,
+            double[] closePrices,
             bool isHigh,
             int candlesBefore,
             int candlesAfter)
@@ -1899,28 +1861,42 @@ namespace Akode.TigerTrade.Indicators
                     continue;
                 }
 
+                bool isBroken, isTested;
+                ClassifyLevel(i, price, prices, closePrices, isHigh, out isBroken, out isTested);
+
                 pivots.Add(new LevelLine
                 {
                     Price = price,
                     StartIndex = i,
-                    IsBroken = IsBroken(i, price, prices, isHigh)
+                    IsBroken = isBroken,
+                    IsTested = isTested
                 });
             }
 
             return pivots;
         }
 
-        private static bool IsBroken(int startIndex, double price, double[] prices, bool isHighLevel)
+        private static void ClassifyLevel(int startIndex, double price,
+            double[] wickPrices, double[] closePrices, bool isHigh,
+            out bool isBroken, out bool isTested)
         {
-            for (int i = startIndex + 1; i < prices.Length; i++)
+            isBroken = false;
+            isTested = false;
+
+            for (int k = startIndex + 1; k < closePrices.Length; k++)
             {
-                if (isHighLevel ? prices[i] > price : prices[i] < price)
+                if (isHigh ? closePrices[k] > price : closePrices[k] < price)
                 {
-                    return true;
+                    isBroken = true;
+                    isTested = false;
+                    return;
+                }
+
+                if (!isTested && (isHigh ? wickPrices[k] > price : wickPrices[k] < price))
+                {
+                    isTested = true;
                 }
             }
-
-            return false;
         }
 
         private static double[] BuildBodyHigh(double[] open, double[] close)

@@ -29,6 +29,9 @@ namespace Akode.TigerTrade.Indicators
         private int _maxBrokenLinesHigh;
         private int _maxBrokenLinesLow;
         private bool _showBrokenLines;
+        private int _maxTestedLinesHigh;
+        private int _maxTestedLinesLow;
+        private bool _showTestedLines = true;
         private bool _includeInTrendlines = true;
         private ChartLine _highSeries;
         private ChartLine _lowSeries;
@@ -45,6 +48,8 @@ namespace Akode.TigerTrade.Indicators
             _maxLinesLow = 5;
             _maxBrokenLinesHigh = 2;
             _maxBrokenLinesLow = 2;
+            _maxTestedLinesHigh = 1;
+            _maxTestedLinesLow = 1;
             EnsureInitialized(_profileIndex);
         }
 
@@ -269,6 +274,61 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
+        [DataMember(Name = "ShowTestedLines")]
+        [Category("Tested lines"), DisplayName("Show tested lines")]
+        public bool ShowTestedLines
+        {
+            get { return _showTestedLines; }
+            set
+            {
+                if (value == _showTestedLines)
+                {
+                    return;
+                }
+
+                _showTestedLines = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "MaxTestedLinesHigh")]
+        [Category("Tested lines"), DisplayName("Max High lines (tested)")]
+        public int MaxTestedLinesHigh
+        {
+            get { return _maxTestedLinesHigh; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _maxTestedLinesHigh)
+                {
+                    return;
+                }
+
+                _maxTestedLinesHigh = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "MaxTestedLinesLow")]
+        [Category("Tested lines"), DisplayName("Max Low lines (tested)")]
+        public int MaxTestedLinesLow
+        {
+            get { return _maxTestedLinesLow; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _maxTestedLinesLow)
+                {
+                    return;
+                }
+
+                _maxTestedLinesLow = value;
+                OnPropertyChanged();
+            }
+        }
+
         [DataMember(Name = "HighLineColor")]
         [Category("Display"), DisplayName("High levels")]
         public ChartLine HighSeries
@@ -336,6 +396,9 @@ namespace Akode.TigerTrade.Indicators
             MaxBrokenLinesHigh = other.MaxBrokenLinesHigh;
             MaxBrokenLinesLow = other.MaxBrokenLinesLow;
             ShowBrokenLines = other.ShowBrokenLines;
+            MaxTestedLinesHigh = other.MaxTestedLinesHigh;
+            MaxTestedLinesLow = other.MaxTestedLinesLow;
+            ShowTestedLines = other.ShowTestedLines;
 
             EnsureInitialized(_profileIndex);
 
