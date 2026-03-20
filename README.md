@@ -16,7 +16,7 @@ This package is designed as a collection of indicators and will expand over time
 Pivot-based support/resistance level detector.
 
 It detects pivot highs/lows and draws horizontal support and resistance levels.
-It supports aggregation to higher intervals, tracks broken levels, and limits visible active/broken lines independently for highs and lows.
+It supports aggregation to higher intervals, tracks broken and tested (wick-pierced) levels, and limits visible lines independently for highs and lows.
 
 #### Features
 
@@ -24,8 +24,13 @@ It supports aggregation to higher intervals, tracks broken levels, and limits vi
 - Optional timeframe aggregation: Any, Minute, Hour, Week, Month.
 - Configurable pivot sensitivity (`Candles before` / `Candles after`).
 - Independent limits for visible high and low levels.
-- Optional rendering of broken levels with dotted style.
+- Tested level detection — wick pierced the level but close held (separate style).
+- Optional rendering of broken levels (close passed through) with dotted style.
+- Round level highlighting with custom style for levels at round price numbers.
+- Live percent-distance labels on the chart for nearest visible levels.
 - Theme/template integration through TigerTrade indicator APIs.
+
+See [docs/SETTINGS_LEVELS_RU.md](docs/SETTINGS_LEVELS_RU.md) for Russian documentation.
 
 #### Settings
 
@@ -37,11 +42,17 @@ It supports aggregation to higher intervals, tracks broken levels, and limits vi
 | Candles after | 2 | Bars to the right required for pivot confirmation. |
 | Max High lines to show | 15 | Max active resistance levels displayed. |
 | Max Low lines to show | 15 | Max active support levels displayed. |
-| Show broken lines | true | Show levels that were breached by price. |
+| Show broken lines | true | Show levels where close passed through. |
 | Max High lines (broken) | 2 | Max broken resistance levels displayed. |
 | Max Low lines (broken) | 2 | Max broken support levels displayed. |
+| Show tested lines | true | Show levels where wick pierced but close held. |
+| Max High lines (tested) | 1 | Max tested resistance levels displayed. |
+| Max Low lines (tested) | 1 | Max tested support levels displayed. |
+| Tested High levels | Green dash | Style/color for tested resistance levels. |
+| Tested Low levels | Red dash | Style/color for tested support levels. |
 | High levels | Green line | Style/color for resistance levels. |
 | Low levels | Red line | Style/color for support levels. |
+| Show distance % labels | false | Draw live percent distance to nearest visible levels. |
 
 #### Round Levels Settings
 
@@ -62,10 +73,12 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 #### Features
 
 - Up to 5 independent internal profiles in one indicator instance.
-- Per-profile timeframe, pivot sensitivity, body/wick mode, limits, broken-level handling, and display styles.
+- Per-profile timeframe, pivot sensitivity, body/wick mode, limits, broken/tested-level handling, and display styles.
 - Per-profile toggle for trendline participation ("Include in trend lines").
+- Tested level detection — wick pierced the level but close held (per-profile toggle).
 - Horizontal levels rendered separately per profile with cross-profile global filters.
 - Optional live percent-distance labels on the chart for the nearest visible support/resistance levels.
+- Round level highlighting with custom style for levels at round price numbers.
 - Global level filters: max total lines, time-based filtering, and merge of nearby levels.
 - Combined upper and lower trend rays built from filtered visible levels.
 - Selectable trendline algorithms: Classic Touches, Weighted Regression, RANSAC, Hough Transform.
@@ -74,6 +87,8 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 - Independent slope filters for upper and lower trendlines.
 - Optional hiding of trendlines already broken by candle bodies.
 - Theme/template integration through TigerTrade indicator APIs.
+
+See [docs/SETTINGS_TRENDS_RU.md](docs/SETTINGS_TRENDS_RU.md) for Russian documentation.
 
 #### Profile Settings (per profile)
 
@@ -88,9 +103,12 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 | Max High lines to show | 5 | Max active resistance levels for this profile. |
 | Max Low lines to show | 5 | Max active support levels for this profile. |
 | Use candle body instead of wicks | false | Use candle body (open/close) instead of wicks (high/low) for pivots. |
-| Show broken lines | false | Show levels that were breached by price. |
+| Show broken lines | false | Show levels where close passed through. |
 | Max High lines (broken) | 2 | Max broken resistance levels for this profile. |
 | Max Low lines (broken) | 2 | Max broken support levels for this profile. |
+| Show tested lines | true | Show levels where wick pierced but close held. |
+| Max High lines (tested) | 1 | Max tested resistance levels for this profile. |
+| Max Low lines (tested) | 1 | Max tested support levels for this profile. |
 | High levels | Colored line | Style/color for resistance levels. |
 | Low levels | Colored line | Style/color for support levels. |
 
@@ -98,12 +116,12 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 
 | Parameter | Default | Description |
 | --- | --- | --- |
-| Max total High levels | 0 | Max total resistance levels across all profiles. 0 = unlimited. |
-| Max total Low levels | 0 | Max total support levels across all profiles. 0 = unlimited. |
+| Max total High levels | 7 | Max total resistance levels across all profiles. 0 = unlimited. |
+| Max total Low levels | 7 | Max total support levels across all profiles. 0 = unlimited. |
 | Time filter (minutes) | 0 | Only show levels whose pivots occurred within the last N minutes. 0 = disabled. |
-| Level merge (ticks) | 0 | Merge horizontal levels within N ticks of each other, keeping the strongest. 0 = disabled. |
+| Level merge (ticks) | 50 | Merge horizontal levels within N ticks of each other, keeping the strongest. 0 = disabled. |
 | Apply filters to trend lines | true | Whether global level filters also affect trendline input. |
-| Show distance % labels | false | Draw live percent distance to the nearest visible levels directly on the chart. |
+| Show distance % labels | true | Draw live percent distance to the nearest visible levels directly on the chart. |
 
 #### Round Levels Settings
 
@@ -115,28 +133,35 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 | Round High levels | Gold line (width 2) | Style/color for round resistance levels. |
 | Round Low levels | Gold line (width 2) | Style/color for round support levels. |
 
+#### Tested Display
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| Tested High levels | Green dash | Style/color for tested resistance levels. |
+| Tested Low levels | Red dash | Style/color for tested support levels. |
+
 #### Trend Lines Settings
 
 | Parameter | Default | Description |
 | --- | --- | --- |
 | Show trend lines | true | Toggle shared trendline rendering. |
-| Max High trend lines | 3 | Max upper trend rays displayed. |
-| Max Low trend lines | 3 | Max lower trend rays displayed. |
-| Tolerance in ticks | 2 | Touch tolerance used when scoring trendlines. |
+| Max High trend lines | 4 | Max upper trend rays displayed. |
+| Max Low trend lines | 4 | Max lower trend rays displayed. |
+| Tolerance in ticks | 100 | Touch tolerance used when scoring trendlines. |
 | Min High touches | 2 | Minimum touches required for upper trendlines. |
 | Min Low touches | 2 | Minimum touches required for lower trendlines. |
-| Left padding bars | 3 | Extend trendlines to the left of the first touch. |
-| Right padding bars | 20 | Extend trendlines into the empty chart area to the right. |
+| Left padding bars | 50 | Extend trendlines to the left of the first touch. |
+| Right padding bars | 500 | Extend trendlines into the empty chart area to the right. |
 | High: only down slope | true | Restrict upper trendlines to descending slope. |
 | Low: only up slope | true | Restrict lower trendlines to ascending slope. |
-| Trendline algorithm | Classic Touches | Algorithm for trendline candidates: Classic Touches, Weighted Regression, RANSAC, Hough Transform. |
+| Trendline algorithm | RANSAC | Algorithm for trendline candidates: Classic Touches, Weighted Regression, RANSAC, Hough Transform. |
 | Allowed past crossing bars | 5 | Allow upper/lower intersections only within the last N bars. |
 | Hide broken trend lines | true | Hide trendlines already broken by candle bodies. |
-| Break bars | 2 | Body-break bars after the first anchor required to hide a trendline. |
-| Break tolerance in ticks | 2 | Extra tolerance beyond the trendline before a body-break counts. |
+| Break bars | 5 | Body-break bars after the first anchor required to hide a trendline. |
+| Break tolerance in ticks | 5 | Extra tolerance beyond the trendline before a body-break counts. |
 | Memory (bars) | 0 | Lock trendlines for N new bars to prevent redrawing. 0 = disabled. |
 | Memory (minutes) | 0 | Lock trendlines for N minutes to prevent redrawing. 0 = disabled. |
-| Trend merge (ticks) | 0 | Merge similar diagonal trendlines within N ticks distance. 0 = disabled. |
+| Trend merge (ticks) | 100 | Merge similar diagonal trendlines within N ticks distance. 0 = disabled. |
 | High trends | Gray line | Style/color for upper trend rays. |
 | Low trends | Gray line | Style/color for lower trend rays. |
 
