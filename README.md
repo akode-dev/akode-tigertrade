@@ -1,5 +1,6 @@
 # Akode TigerTrade Indicators
 
+[![CI](https://github.com/akode-dev/akode-tigertrade/actions/workflows/ci.yml/badge.svg)](https://github.com/akode-dev/akode-tigertrade/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![.NET Framework 4.7.2](https://img.shields.io/badge/.NET%20Framework-4.7.2-blue.svg)](https://dotnet.microsoft.com/)
 [![TigerTrade](https://img.shields.io/badge/TigerTrade-6.9%2B-orange.svg)](https://www.tiger.com/terminal)
@@ -189,37 +190,26 @@ dotnet msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any C
 
 ## Releasing on GitHub
 
-`libs/*.dll` are proprietary TigerTrade dependencies and are ignored by git.
-They stay local and are used only to compile.
-
-Recommended release flow:
-
-1. Prepare local dependencies:
+Releases are automated via GitHub Actions. Push a version tag to trigger a build and release:
 
 ```powershell
-.\scripts\setup-libs.ps1
+git tag -a v1.3.0 -m "Release v1.3.0"
+git push origin v1.3.0
 ```
 
-2. Build Release:
+The [Release workflow](.github/workflows/release.yml) will:
+1. Build the DLL in Release configuration.
+2. Stamp the assembly version from the tag.
+3. Generate a SHA256 checksum.
+4. Create a GitHub Release with the DLL and checksum attached.
+
+Pre-release tags (e.g., `v1.3.0-beta.1`) are automatically marked as prerelease.
+
+To create a release locally instead, use the helper script:
 
 ```powershell
-msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any CPU"
+.\scripts\release-gh.ps1 -Version "1.3.0"
 ```
-
-Or:
-
-```powershell
-dotnet msbuild Akode.TigerTrade.slnx /p:Configuration=Release /p:Platform="Any CPU"
-```
-
-3. Publish only the built plugin DLL from:
-
-`src/Akode.TigerTrade.Indicators/bin/Release/Akode.TigerTrade.Indicators.dll`
-
-4. Create Git tag and GitHub Release, then upload this DLL as a release asset.
-
-If you later automate releases via CI, use a self-hosted runner with local TigerTrade DLLs.
-Do not upload proprietary TigerTrade DLLs to the repository or release assets.
 
 ## Project Structure
 

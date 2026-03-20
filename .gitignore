@@ -27,8 +27,9 @@ _ReSharper*/
 .DS_Store
 Thumbs.db
 
-# TigerTrade proprietary binaries (keep local only)
-libs/*.dll
+# TigerTrade proprietary binaries not needed for build
+libs/TigerTrade.Sockets.dll
+libs/TigerTrade.Tc.dll
 
 # Reverse-engineered/proprietary sources
 /decompiled/
