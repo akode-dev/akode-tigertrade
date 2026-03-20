@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-03-20
+
+### Added
+
+- GitHub Actions CI workflow for build verification on push and pull requests.
+- GitHub Actions Release workflow for automated DLL builds and GitHub Releases on tag push.
+
+### Changed
+
+- Committed TigerTrade reference assemblies to enable CI builds.
+- Updated release script to defer to CI by default (added `-SkipCI` flag for manual releases).
+
 ## [1.2.0] - 2026-03-15
 
 ### Added
