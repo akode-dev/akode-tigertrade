@@ -7,10 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-03-20
+
 ### Added
 
 - Round level highlighting for both _Akode: Levels and _Akode: Trends — custom style for horizontal levels at round price numbers, with configurable step and tolerance.
 - Distance percent labels for _Akode: Levels (ported from _Akode: Trends).
+- Tested level detection (wick pierce without close breakout) with separate styling for both indicators.
+- Disclaimer section in README.
+
+### Changed
+
+- IsBroken now checks close instead of wick for more accurate level breakout detection.
+- Extracted shared `RoundPriceHelper` to reduce code duplication.
 
 ### Removed
 
