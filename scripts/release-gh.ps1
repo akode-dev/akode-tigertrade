@@ -11,6 +11,7 @@ param(
     [switch]$Draft,
     [switch]$Prerelease,
     [switch]$SkipBuild,
+    [switch]$SkipCI,
     [switch]$AllowDirty
 )
 
@@ -120,6 +121,13 @@ if (-not $remoteTagExists) {
     Exec -FilePath "git" -Arguments @("push", "origin", "refs/tags/$tag")
 }
 
+if (-not $SkipCI) {
+    Write-Host "Tag '$tag' pushed. GitHub Actions will create the release automatically." -ForegroundColor Green
+    Write-Host "Monitor: gh run watch" -ForegroundColor Cyan
+    exit 0
+}
+
+# Manual release creation (use -SkipCI to bypass GitHub Actions)
 gh release view $tag *> $null
 if ($LASTEXITCODE -eq 0) {
     throw "GitHub release '$tag' already exists."

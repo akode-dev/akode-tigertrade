@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Determine version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag -replace '^v', ''
+          $numericVer = ($ver -split '-')[0]
+          $parts = $numericVer.Split('.')
+          while ($parts.Count -lt 4) { $parts += '0' }
+          $assemblyVer = $parts[0..3] -join '.'
+          echo "TAG=$tag" >> $env:GITHUB_OUTPUT
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+          echo "ASSEMBLY_VERSION=$assemblyVer" >> $env:GITHUB_OUTPUT
+
+      - name: Stamp assembly version
+        shell: pwsh
+        run: |
+          $file = "src/Akode.TigerTrade.Indicators/Properties/AssemblyInfo.cs"
+          $content = Get-Content $file -Raw
+          $ver = "${{ steps.version.outputs.ASSEMBLY_VERSION }}"
+          $content = $content -replace 'AssemblyVersion\("[^"]*"\)', "AssemblyVersion(`"$ver`")"
+          $content = $content -replace 'AssemblyFileVersion\("[^"]*"\)', "AssemblyFileVersion(`"$ver`")"
+          Set-Content -Path $file -Value $content -NoNewline
+          Write-Host "Stamped assembly version: $ver"
+
+      - name: Build
+        run: >
+          msbuild Akode.TigerTrade.slnx
+          /p:Configuration=Release
+          "/p:Platform=Any CPU"
+          /m
+          /v:minimal
+
+      - name: Prepare release assets
+        id: assets
+        shell: pwsh
+        run: |
+          $dll = "src/Akode.TigerTrade.Indicators/bin/Release/Akode.TigerTrade.Indicators.dll"
+          if (-not (Test-Path $dll)) { throw "Build artifact not found: $dll" }
+          $hash = (Get-FileHash -Path $dll -Algorithm SHA256).Hash.ToLowerInvariant()
+          $checksumFile = "src/Akode.TigerTrade.Indicators/bin/Release/Akode.TigerTrade.Indicators.dll.sha256"
+          "$hash  Akode.TigerTrade.Indicators.dll" | Set-Content -Path $checksumFile -NoNewline
+          echo "DLL_PATH=$dll" >> $env:GITHUB_OUTPUT
+          echo "CHECKSUM_PATH=$checksumFile" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $prerelease = $tag -match '-'
+
+          $args = @(
+            "release", "create", $tag,
+            "${{ steps.assets.outputs.DLL_PATH }}",
+            "${{ steps.assets.outputs.CHECKSUM_PATH }}",
+            "--title", "Akode TigerTrade Indicators $tag",
+            "--generate-notes"
+          )
+
+          if ($prerelease) { $args += "--prerelease" }
+
+          gh @args
