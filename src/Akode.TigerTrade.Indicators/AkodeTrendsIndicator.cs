@@ -80,6 +80,8 @@ namespace Akode.TigerTrade.Indicators
         private int _roundLevelToleranceTicks;
         private ChartLine _roundHighSeries;
         private ChartLine _roundLowSeries;
+        private ChartLine _testedHighSeries;
+        private ChartLine _testedLowSeries;
         private List<VisibleHorizontalLevel> _visibleHorizontalLevels;
 
         [Browsable(false)]
@@ -371,6 +373,54 @@ namespace Akode.TigerTrade.Indicators
                 _roundLowSeries = value ?? CreateDefaultRoundSeries(false);
                 _roundLowSeries.PropertyChanged -= HandleNestedSettingsChanged;
                 _roundLowSeries.PropertyChanged += HandleNestedSettingsChanged;
+
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "TestedHighSeries")]
+        [Category("Tested display"), DisplayName("Tested High levels")]
+        public ChartLine TestedHighSeries
+        {
+            get
+            {
+                EnsureTestedStyles();
+                return _testedHighSeries;
+            }
+            set
+            {
+                if (_testedHighSeries != null)
+                {
+                    _testedHighSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                }
+
+                _testedHighSeries = value ?? CreateDefaultTestedSeries(true);
+                _testedHighSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                _testedHighSeries.PropertyChanged += HandleNestedSettingsChanged;
+
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "TestedLowSeries")]
+        [Category("Tested display"), DisplayName("Tested Low levels")]
+        public ChartLine TestedLowSeries
+        {
+            get
+            {
+                EnsureTestedStyles();
+                return _testedLowSeries;
+            }
+            set
+            {
+                if (_testedLowSeries != null)
+                {
+                    _testedLowSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                }
+
+                _testedLowSeries = value ?? CreateDefaultTestedSeries(false);
+                _testedLowSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                _testedLowSeries.PropertyChanged += HandleNestedSettingsChanged;
 
                 OnPropertyChanged();
             }
@@ -747,6 +797,7 @@ namespace Akode.TigerTrade.Indicators
             InitializeProfiles();
             InitializeTrendStyles();
             EnsureRoundLevelStyles();
+            EnsureTestedStyles();
             EnsureVisibleHorizontalLevels();
         }
 
@@ -756,6 +807,7 @@ namespace Akode.TigerTrade.Indicators
             InitializeProfiles();
             InitializeTrendStyles();
             EnsureRoundLevelStyles();
+            EnsureTestedStyles();
             EnsureVisibleHorizontalLevels();
         }
 
@@ -773,6 +825,8 @@ namespace Akode.TigerTrade.Indicators
             LowTrendSeries.CopyTheme(CreateDefaultTrendSeries(false));
             RoundHighSeries.CopyTheme(CreateDefaultRoundSeries(true));
             RoundLowSeries.CopyTheme(CreateDefaultRoundSeries(false));
+            TestedHighSeries.CopyTheme(CreateDefaultTestedSeries(true));
+            TestedLowSeries.CopyTheme(CreateDefaultTestedSeries(false));
 
             base.ApplyColors(theme);
         }
@@ -821,6 +875,8 @@ namespace Akode.TigerTrade.Indicators
             LowTrendSeries.CopyTheme(source.LowTrendSeries);
             RoundHighSeries.CopyTheme(source.RoundHighSeries);
             RoundLowSeries.CopyTheme(source.RoundLowSeries);
+            TestedHighSeries.CopyTheme(source.TestedHighSeries);
+            TestedLowSeries.CopyTheme(source.TestedLowSeries);
 
             base.CopyTemplate(indicator, style);
         }
@@ -1204,9 +1260,14 @@ namespace Akode.TigerTrade.Indicators
                 {
                     style = isHigh ? _roundHighSeries : _roundLowSeries;
                 }
+                else if (level.IsTested)
+                {
+                    style = isHigh ? _testedHighSeries : _testedLowSeries;
+                }
 
                 var data = CreateSeriesData(seriesLength, level.StartIndex, delegate { return level.Price; });
-                var lineStyle = CloneLine(style, level.IsBroken ? XDashStyle.Dot : style.Style);
+                var dashStyle = level.IsBroken ? XDashStyle.Dot : level.IsTested ? XDashStyle.Dash : style.Style;
+                var lineStyle = CloneLine(style, dashStyle);
 
                 if (lineStyle.Visible)
                 {
@@ -1581,6 +1642,33 @@ namespace Akode.TigerTrade.Indicators
             {
                 _roundLowSeries = CreateDefaultRoundSeries(false);
                 _roundLowSeries.PropertyChanged += HandleNestedSettingsChanged;
+            }
+        }
+
+        private static ChartLine CreateDefaultTestedSeries(bool isHigh)
+        {
+            return new ChartLine
+            {
+                Style = XDashStyle.Dash,
+                Width = 1,
+                Color = isHigh
+                    ? XColor.FromArgb(100, 8, 153, 129)
+                    : XColor.FromArgb(100, 247, 82, 95)
+            };
+        }
+
+        private void EnsureTestedStyles()
+        {
+            if (_testedHighSeries == null)
+            {
+                _testedHighSeries = CreateDefaultTestedSeries(true);
+                _testedHighSeries.PropertyChanged += HandleNestedSettingsChanged;
+            }
+
+            if (_testedLowSeries == null)
+            {
+                _testedLowSeries = CreateDefaultTestedSeries(false);
+                _testedLowSeries.PropertyChanged += HandleNestedSettingsChanged;
             }
         }
 

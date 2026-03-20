@@ -101,6 +101,26 @@ namespace Akode.TigerTrade.Indicators
         [Category("Broken lines"), DisplayName("Show broken lines")]
         public bool ShowBrokenLines { get; set; } = true;
 
+        [DataMember(Name = "ShowTestedLines"), DefaultValue(true)]
+        [Category("Tested lines"), DisplayName("Show tested lines")]
+        public bool ShowTestedLines { get; set; } = true;
+
+        [DataMember(Name = "MaxTestedLinesHigh"), DefaultValue(1)]
+        [Category("Tested lines"), DisplayName("Max High lines (tested)")]
+        public int MaxTestedLinesHigh { get; set; } = 1;
+
+        [DataMember(Name = "MaxTestedLinesLow"), DefaultValue(1)]
+        [Category("Tested lines"), DisplayName("Max Low lines (tested)")]
+        public int MaxTestedLinesLow { get; set; } = 1;
+
+        [DataMember(Name = "TestedHighSeries")]
+        [Category("Tested lines"), DisplayName("Tested High levels")]
+        public ChartLine TestedHighSeries { get; set; }
+
+        [DataMember(Name = "TestedLowSeries")]
+        [Category("Tested lines"), DisplayName("Tested Low levels")]
+        public ChartLine TestedLowSeries { get; set; }
+
         [DataMember(Name = "HighLineColor")]
         [Category("Display"), DisplayName("High levels")]
         public ChartLine HighSeries { get; set; }
@@ -138,6 +158,7 @@ namespace Akode.TigerTrade.Indicators
             public double Price;
             public int StartIndex;
             public bool IsBroken;
+            public bool IsTested;
         }
 
         private struct VisibleLevel
@@ -172,6 +193,7 @@ namespace Akode.TigerTrade.Indicators
         {
             if (HighSeries == null || LowSeries == null) InitializeStyles();
             if (RoundHighSeries == null || RoundLowSeries == null) InitializeRoundStyles();
+            if (TestedHighSeries == null || TestedLowSeries == null) InitializeTestedStyles();
         }
 
         private void InitializeStyles()
@@ -191,6 +213,7 @@ namespace Akode.TigerTrade.Indicators
             };
 
             InitializeRoundStyles();
+            InitializeTestedStyles();
         }
 
         private void InitializeRoundStyles()
@@ -209,6 +232,24 @@ namespace Akode.TigerTrade.Indicators
                 Color = XColor.FromArgb(200, 218, 165, 32)
             };
         }
+
+        private void InitializeTestedStyles()
+        {
+            TestedHighSeries = new ChartLine
+            {
+                Style = XDashStyle.Dash,
+                Width = 1,
+                Color = XColor.FromArgb(100, 8, 153, 129)
+            };
+
+            TestedLowSeries = new ChartLine
+            {
+                Style = XDashStyle.Dash,
+                Width = 1,
+                Color = XColor.FromArgb(100, 247, 82, 95)
+            };
+        }
+
         public override void ApplyColors(IChartTheme theme)
         {
             HighSeries.Color = theme.GetNextColor();
@@ -217,6 +258,10 @@ namespace Akode.TigerTrade.Indicators
             if (RoundHighSeries == null || RoundLowSeries == null) InitializeRoundStyles();
             RoundHighSeries.Color = XColor.FromArgb(200, 218, 165, 32);
             RoundLowSeries.Color = XColor.FromArgb(200, 218, 165, 32);
+
+            if (TestedHighSeries == null || TestedLowSeries == null) InitializeTestedStyles();
+            TestedHighSeries.Color = XColor.FromArgb(100, 8, 153, 129);
+            TestedLowSeries.Color = XColor.FromArgb(100, 247, 82, 95);
 
             base.ApplyColors(theme);
         }
@@ -252,6 +297,13 @@ namespace Akode.TigerTrade.Indicators
             }
 
             ShowDistancePercentLabels = i.ShowDistancePercentLabels;
+            ShowTestedLines = i.ShowTestedLines;
+            MaxTestedLinesHigh = i.MaxTestedLinesHigh;
+            MaxTestedLinesLow = i.MaxTestedLinesLow;
+
+            if (TestedHighSeries == null || TestedLowSeries == null) InitializeTestedStyles();
+            if (i.TestedHighSeries != null) TestedHighSeries.CopyTheme(i.TestedHighSeries);
+            if (i.TestedLowSeries != null) TestedLowSeries.CopyTheme(i.TestedLowSeries);
 
             HighlightRoundLevels = i.HighlightRoundLevels;
             RoundLevelStep = i.RoundLevelStep;
@@ -300,8 +352,20 @@ namespace Akode.TigerTrade.Indicators
             var orderedHighPivots = highPivots.OrderByDescending(p => p.StartIndex);
             var orderedLowPivots = lowPivots.OrderByDescending(p => p.StartIndex);
 
-            var finalHighs = orderedHighPivots.Where(p => !p.IsBroken).Take(MaxLinesHigh).ToList();
-            var finalLows = orderedLowPivots.Where(p => !p.IsBroken).Take(MaxLinesLow).ToList();
+            var finalHighs = orderedHighPivots.Where(p => !p.IsBroken && !p.IsTested).Take(MaxLinesHigh).ToList();
+            var finalLows = orderedLowPivots.Where(p => !p.IsBroken && !p.IsTested).Take(MaxLinesLow).ToList();
+
+            if (ShowTestedLines)
+            {
+                if (MaxTestedLinesHigh > 0)
+                {
+                    finalHighs.AddRange(orderedHighPivots.Where(p => p.IsTested).Take(MaxTestedLinesHigh));
+                }
+                if (MaxTestedLinesLow > 0)
+                {
+                    finalLows.AddRange(orderedLowPivots.Where(p => p.IsTested).Take(MaxTestedLinesLow));
+                }
+            }
 
             if (ShowBrokenLines)
             {
@@ -390,8 +454,9 @@ namespace Akode.TigerTrade.Indicators
                 if (isPivot)
                 {
                     int startIndex = isHigh ? centralBar.HighIndex : centralBar.LowIndex;
-                    bool isBroken = IsBroken(startIndex, pivotPrice, originalPrices, isHigh);
-                    pivots.Add(new LevelLine { Price = pivotPrice, StartIndex = startIndex, IsBroken = isBroken });
+                    bool isBroken, isTested;
+                    ClassifyLevel(startIndex, pivotPrice, originalPrices, Helper.Close, isHigh, out isBroken, out isTested);
+                    pivots.Add(new LevelLine { Price = pivotPrice, StartIndex = startIndex, IsBroken = isBroken, IsTested = isTested });
                 }
             }
             return pivots;
@@ -415,20 +480,35 @@ namespace Akode.TigerTrade.Indicators
                 }
                 if (isPivot)
                 {
-                    bool isBroken = IsBroken(i, price, prices, isHigh);
-                    pivots.Add(new LevelLine { Price = price, StartIndex = i, IsBroken = isBroken });
+                    bool isBroken, isTested;
+                    ClassifyLevel(i, price, prices, Helper.Close, isHigh, out isBroken, out isTested);
+                    pivots.Add(new LevelLine { Price = price, StartIndex = i, IsBroken = isBroken, IsTested = isTested });
                 }
             }
             return pivots;
         }
 
-        private bool IsBroken(int startIndex, double price, double[] prices, bool isHighLevel)
+        private static void ClassifyLevel(int startIndex, double price,
+            double[] wickPrices, double[] closePrices, bool isHigh,
+            out bool isBroken, out bool isTested)
         {
-            for (int k = startIndex + 1; k < prices.Length; k++)
+            isBroken = false;
+            isTested = false;
+
+            for (int k = startIndex + 1; k < closePrices.Length; k++)
             {
-                if (isHighLevel ? prices[k] > price : prices[k] < price) return true;
+                if (isHigh ? closePrices[k] > price : closePrices[k] < price)
+                {
+                    isBroken = true;
+                    isTested = false;
+                    return;
+                }
+
+                if (!isTested && (isHigh ? wickPrices[k] > price : wickPrices[k] < price))
+                {
+                    isTested = true;
+                }
             }
-            return false;
         }
 
         private CircularBuffer<LevelLine> ToCircularBuffer(List<LevelLine> levels)
@@ -451,6 +531,8 @@ namespace Akode.TigerTrade.Indicators
             {
                 if (line.IsBroken && !ShowBrokenLines)
                     continue;
+                if (line.IsTested && !ShowTestedLines)
+                    continue;
 
                 var style = baseStyle;
 
@@ -458,16 +540,21 @@ namespace Akode.TigerTrade.Indicators
                 {
                     style = isHigh ? RoundHighSeries : RoundLowSeries;
                 }
+                else if (line.IsTested)
+                {
+                    style = isHigh ? TestedHighSeries : TestedLowSeries;
+                }
 
                 var data = new double[dataLength];
                 for (int i = 0; i < data.Length; i++) data[i] = double.NaN;
                 for (int i = line.StartIndex; i < dataLength; i++) data[i] = line.Price;
 
+                var dashStyle = line.IsBroken ? XDashStyle.Dot : line.IsTested ? XDashStyle.Dash : style.Style;
                 var lineStyle = new ChartLine
                 {
                     Color = style.Color,
                     Width = style.Width,
-                    Style = line.IsBroken ? XDashStyle.Dot : style.Style
+                    Style = dashStyle
                 };
 
                 if (lineStyle.Visible)
