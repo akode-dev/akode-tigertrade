@@ -177,61 +177,6 @@ namespace Akode.TigerTrade.Indicators
                 FinalizeLevels(lowPivots, false, settings));
         }
 
-        public static List<LevelLine> CalculateAllRawPivots(
-            IndicatorsHelper helper,
-            IChartDataProvider dataProvider,
-            AkodeTrendsProfileSettings settings,
-            int profileIndex)
-        {
-            var candlesBefore = Math.Max(0, settings.CandlesBefore);
-            var candlesAfter = Math.Max(0, settings.CandlesAfter);
-            var minBars = candlesBefore + candlesAfter + 1;
-
-            if (helper.Count < minBars)
-            {
-                return new List<LevelLine>();
-            }
-
-            var highSource = settings.UseCandleBodyInsteadOfWicks
-                ? BuildBodyHigh(helper.Open, helper.Close)
-                : helper.High;
-            var lowSource = settings.UseCandleBodyInsteadOfWicks
-                ? BuildBodyLow(helper.Open, helper.Close)
-                : helper.Low;
-
-            List<LevelLine> highPivots;
-            List<LevelLine> lowPivots;
-
-            if (settings.PeriodType == AkodeLevelsPeriodType.AnyTimeFrame)
-            {
-                highPivots = FindPivotsInCurrentData(highSource, true, candlesBefore, candlesAfter);
-                lowPivots = FindPivotsInCurrentData(lowSource, false, candlesBefore, candlesAfter);
-            }
-            else
-            {
-                var bars = BuildOnTimeframe(helper.Date, highSource, lowSource, dataProvider, settings);
-                if (bars.Count < minBars)
-                {
-                    return new List<LevelLine>();
-                }
-
-                highPivots = FindPivotsInTimeFrameData(bars, highSource, true, candlesBefore, candlesAfter);
-                lowPivots = FindPivotsInTimeFrameData(bars, lowSource, false, candlesBefore, candlesAfter);
-            }
-
-            ChartPeriodType timeframeType;
-            int timeframeInterval;
-            var timeframeWeight = ResolveTimeframeWeight(settings, dataProvider, out timeframeType, out timeframeInterval);
-
-            ApplyLevelMetadata(highPivots, profileIndex, timeframeType, timeframeInterval, timeframeWeight);
-            ApplyLevelMetadata(lowPivots, profileIndex, timeframeType, timeframeInterval, timeframeWeight);
-
-            var all = new List<LevelLine>(highPivots.Count + lowPivots.Count);
-            all.AddRange(highPivots);
-            all.AddRange(lowPivots);
-            return all;
-        }
-
         public static TrendSelectionResult SelectTrendLines(
             IEnumerable<LevelLine> highLevels,
             IEnumerable<LevelLine> lowLevels,

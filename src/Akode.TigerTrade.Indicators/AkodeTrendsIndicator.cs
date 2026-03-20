@@ -75,11 +75,11 @@ namespace Akode.TigerTrade.Indicators
         private DateTime _cachedAtTime;
         private double _cachedFirstBarPrice;
         private bool _showDistancePercentLabels = true;
-        private bool _showBaseLine;
-        private int _baseLineToleranceTicks = 10;
-        private int _baseLineLookbackBars;
-        private int _baseLineLookbackMinutes = 120;
-        private ChartLine _baseLineSeries;
+        private bool _highlightRoundLevels;
+        private double _roundLevelStep;
+        private int _roundLevelToleranceTicks;
+        private ChartLine _roundHighSeries;
+        private ChartLine _roundLowSeries;
         private List<VisibleHorizontalLevel> _visibleHorizontalLevels;
 
         [Browsable(false)]
@@ -269,6 +269,109 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 _showDistancePercentLabels = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "HighlightRoundLevels")]
+        [Category("Round levels"), DisplayName("Highlight round levels")]
+        public bool HighlightRoundLevels
+        {
+            get { return _highlightRoundLevels; }
+            set
+            {
+                if (value == _highlightRoundLevels)
+                {
+                    return;
+                }
+
+                _highlightRoundLevels = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "RoundLevelStep")]
+        [Category("Round levels"), DisplayName("Round step")]
+        public double RoundLevelStep
+        {
+            get { return _roundLevelStep; }
+            set
+            {
+                value = Math.Max(0.0, value);
+
+                if (value == _roundLevelStep)
+                {
+                    return;
+                }
+
+                _roundLevelStep = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "RoundLevelToleranceTicks")]
+        [Category("Round levels"), DisplayName("Round tolerance (ticks)")]
+        public int RoundLevelToleranceTicks
+        {
+            get { return _roundLevelToleranceTicks; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _roundLevelToleranceTicks)
+                {
+                    return;
+                }
+
+                _roundLevelToleranceTicks = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "RoundHighSeries")]
+        [Category("Round levels"), DisplayName("Round High levels")]
+        public ChartLine RoundHighSeries
+        {
+            get
+            {
+                EnsureRoundLevelStyles();
+                return _roundHighSeries;
+            }
+            set
+            {
+                if (_roundHighSeries != null)
+                {
+                    _roundHighSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                }
+
+                _roundHighSeries = value ?? CreateDefaultRoundSeries(true);
+                _roundHighSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                _roundHighSeries.PropertyChanged += HandleNestedSettingsChanged;
+
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "RoundLowSeries")]
+        [Category("Round levels"), DisplayName("Round Low levels")]
+        public ChartLine RoundLowSeries
+        {
+            get
+            {
+                EnsureRoundLevelStyles();
+                return _roundLowSeries;
+            }
+            set
+            {
+                if (_roundLowSeries != null)
+                {
+                    _roundLowSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                }
+
+                _roundLowSeries = value ?? CreateDefaultRoundSeries(false);
+                _roundLowSeries.PropertyChanged -= HandleNestedSettingsChanged;
+                _roundLowSeries.PropertyChanged += HandleNestedSettingsChanged;
+
                 OnPropertyChanged();
             }
         }
@@ -639,109 +742,11 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
-        [DataMember(Name = "ShowBaseLine")]
-        [Category("Base line"), DisplayName("Show base line")]
-        public bool ShowBaseLine
-        {
-            get { return _showBaseLine; }
-            set
-            {
-                if (value == _showBaseLine)
-                {
-                    return;
-                }
-
-                _showBaseLine = value;
-                OnPropertyChanged();
-            }
-        }
-
-        [DataMember(Name = "BaseLineToleranceTicks")]
-        [Category("Base line"), DisplayName("Tolerance (ticks)")]
-        public int BaseLineToleranceTicks
-        {
-            get { return _baseLineToleranceTicks; }
-            set
-            {
-                value = Math.Max(1, value);
-
-                if (value == _baseLineToleranceTicks)
-                {
-                    return;
-                }
-
-                _baseLineToleranceTicks = value;
-                OnPropertyChanged();
-            }
-        }
-
-        [DataMember(Name = "BaseLineLookbackBars")]
-        [Category("Base line"), DisplayName("Lookback (bars)")]
-        public int BaseLineLookbackBars
-        {
-            get { return _baseLineLookbackBars; }
-            set
-            {
-                value = Math.Max(0, value);
-
-                if (value == _baseLineLookbackBars)
-                {
-                    return;
-                }
-
-                _baseLineLookbackBars = value;
-                OnPropertyChanged();
-            }
-        }
-
-        [DataMember(Name = "BaseLineLookbackMinutes")]
-        [Category("Base line"), DisplayName("Lookback (minutes)")]
-        public int BaseLineLookbackMinutes
-        {
-            get { return _baseLineLookbackMinutes; }
-            set
-            {
-                value = Math.Max(0, value);
-
-                if (value == _baseLineLookbackMinutes)
-                {
-                    return;
-                }
-
-                _baseLineLookbackMinutes = value;
-                OnPropertyChanged();
-            }
-        }
-
-        [DataMember(Name = "BaseLineSeries")]
-        [Category("Base line"), DisplayName("Base line style")]
-        public ChartLine BaseLineSeries
-        {
-            get
-            {
-                EnsureBaseLineSeries();
-                return _baseLineSeries;
-            }
-            set
-            {
-                if (_baseLineSeries != null)
-                {
-                    _baseLineSeries.PropertyChanged -= HandleNestedSettingsChanged;
-                }
-
-                _baseLineSeries = value ?? CreateDefaultBaseLineSeries();
-                _baseLineSeries.PropertyChanged -= HandleNestedSettingsChanged;
-                _baseLineSeries.PropertyChanged += HandleNestedSettingsChanged;
-
-                OnPropertyChanged();
-            }
-        }
-
         public AkodeTrendsIndicator()
         {
             InitializeProfiles();
             InitializeTrendStyles();
-            EnsureBaseLineSeries();
+            EnsureRoundLevelStyles();
             EnsureVisibleHorizontalLevels();
         }
 
@@ -750,7 +755,7 @@ namespace Akode.TigerTrade.Indicators
         {
             InitializeProfiles();
             InitializeTrendStyles();
-            EnsureBaseLineSeries();
+            EnsureRoundLevelStyles();
             EnsureVisibleHorizontalLevels();
         }
 
@@ -758,7 +763,6 @@ namespace Akode.TigerTrade.Indicators
         {
             InitializeProfiles();
             InitializeTrendStyles();
-            EnsureBaseLineSeries();
 
             Profile1.ApplyDisplayDefaults(1);
             Profile2.ApplyDisplayDefaults(2);
@@ -767,7 +771,8 @@ namespace Akode.TigerTrade.Indicators
             Profile5.ApplyDisplayDefaults(5);
             HighTrendSeries.CopyTheme(CreateDefaultTrendSeries(true));
             LowTrendSeries.CopyTheme(CreateDefaultTrendSeries(false));
-            BaseLineSeries.CopyTheme(CreateDefaultBaseLineSeries());
+            RoundHighSeries.CopyTheme(CreateDefaultRoundSeries(true));
+            RoundLowSeries.CopyTheme(CreateDefaultRoundSeries(false));
 
             base.ApplyColors(theme);
         }
@@ -808,14 +813,14 @@ namespace Akode.TigerTrade.Indicators
             TrendlineMemoryMinutes = source.TrendlineMemoryMinutes;
             TrendlineMergeTicks = source.TrendlineMergeTicks;
 
-            ShowBaseLine = source.ShowBaseLine;
-            BaseLineToleranceTicks = source.BaseLineToleranceTicks;
-            BaseLineLookbackBars = source.BaseLineLookbackBars;
-            BaseLineLookbackMinutes = source.BaseLineLookbackMinutes;
+            HighlightRoundLevels = source.HighlightRoundLevels;
+            RoundLevelStep = source.RoundLevelStep;
+            RoundLevelToleranceTicks = source.RoundLevelToleranceTicks;
 
             HighTrendSeries.CopyTheme(source.HighTrendSeries);
             LowTrendSeries.CopyTheme(source.LowTrendSeries);
-            BaseLineSeries.CopyTheme(source.BaseLineSeries);
+            RoundHighSeries.CopyTheme(source.RoundHighSeries);
+            RoundLowSeries.CopyTheme(source.RoundLowSeries);
 
             base.CopyTemplate(indicator, style);
         }
@@ -845,26 +850,8 @@ namespace Akode.TigerTrade.Indicators
             var filteredHigh = ApplyLevelFilters(highLevels, true, dataLength, priceStep);
             var filteredLow = ApplyLevelFilters(lowLevels, false, dataLength, priceStep);
 
-            DrawFilteredHorizontalLines(filteredHigh, true, dataLength);
-            DrawFilteredHorizontalLines(filteredLow, false, dataLength);
-
-            if (_showBaseLine && priceStep > 0.0)
-            {
-                var rawPivots = CollectAllRawPivots();
-                var baseLineTolerance = Math.Max(1, _baseLineToleranceTicks) * priceStep;
-                var lookbackStart = ComputeLookbackStart(dataLength);
-                var baseLinePrice = FindBaseLinePrice(rawPivots, baseLineTolerance, dataLength, lookbackStart);
-
-                if (!double.IsNaN(baseLinePrice))
-                {
-                    EnsureBaseLineSeries();
-                    var data = CreateSeriesData(dataLength, 0, delegate { return baseLinePrice; });
-                    Series.Add(new IndicatorSeriesData(data, CloneLine(_baseLineSeries, _baseLineSeries.Style))
-                    {
-                        Style = { DisableMinMax = true }
-                    });
-                }
-            }
+            DrawFilteredHorizontalLines(filteredHigh, true, dataLength, priceStep);
+            DrawFilteredHorizontalLines(filteredLow, false, dataLength, priceStep);
 
             if (!ShowTrendLines)
             {
@@ -1114,27 +1101,6 @@ namespace Akode.TigerTrade.Indicators
             };
         }
 
-        private static ChartLine CreateDefaultBaseLineSeries()
-        {
-            return new ChartLine
-            {
-                Style = XDashStyle.Solid,
-                Width = 3,
-                Color = XColor.FromArgb(94, 139, 69, 19)
-            };
-        }
-
-        private void EnsureBaseLineSeries()
-        {
-            if (_baseLineSeries == null)
-            {
-                _baseLineSeries = CreateDefaultBaseLineSeries();
-            }
-
-            _baseLineSeries.PropertyChanged -= HandleNestedSettingsChanged;
-            _baseLineSeries.PropertyChanged += HandleNestedSettingsChanged;
-        }
-
         private void EnsureVisibleHorizontalLevels()
         {
             if (_visibleHorizontalLevels == null)
@@ -1148,142 +1114,6 @@ namespace Akode.TigerTrade.Indicators
             OnPropertyChanged(string.Empty);
         }
 
-
-        private List<TrendsCalculationEngine.LevelLine> CollectAllRawPivots()
-        {
-            var all = new List<TrendsCalculationEngine.LevelLine>();
-            CollectRawPivotsFromProfile(Profile1, 1, all);
-            CollectRawPivotsFromProfile(Profile2, 2, all);
-            CollectRawPivotsFromProfile(Profile3, 3, all);
-            CollectRawPivotsFromProfile(Profile4, 4, all);
-            CollectRawPivotsFromProfile(Profile5, 5, all);
-            return all;
-        }
-
-        private void CollectRawPivotsFromProfile(
-            AkodeTrendsProfileSettings profile,
-            int profileIndex,
-            List<TrendsCalculationEngine.LevelLine> target)
-        {
-            if (profile == null || !profile.Enabled)
-            {
-                return;
-            }
-
-            target.AddRange(TrendsCalculationEngine.CalculateAllRawPivots(
-                Helper, DataProvider, profile, profileIndex));
-        }
-
-        private int ComputeLookbackStart(int dataLength)
-        {
-            var startBar = 0;
-
-            if (_baseLineLookbackBars > 0)
-            {
-                startBar = Math.Max(startBar, dataLength - _baseLineLookbackBars);
-            }
-
-            if (_baseLineLookbackMinutes > 0 && dataLength > 0)
-            {
-                var date = Helper.Date;
-                var cutoff = DateTime.FromOADate(date[dataLength - 1]).AddMinutes(-_baseLineLookbackMinutes);
-
-                for (int i = dataLength - 1; i >= 0; i--)
-                {
-                    if (DateTime.FromOADate(date[i]) < cutoff)
-                    {
-                        startBar = Math.Max(startBar, i + 1);
-                        break;
-                    }
-                }
-            }
-
-            return Math.Min(startBar, dataLength - 1);
-        }
-
-        private double FindBaseLinePrice(
-            List<TrendsCalculationEngine.LevelLine> pivots,
-            double tolerance,
-            int dataLength,
-            int lookbackStart)
-        {
-            if (pivots.Count == 0 || dataLength == 0)
-            {
-                return double.NaN;
-            }
-
-            if (lookbackStart > 0)
-            {
-                pivots.RemoveAll(p => p.StartIndex < lookbackStart);
-            }
-
-            if (pivots.Count == 0)
-            {
-                return double.NaN;
-            }
-
-            pivots.Sort((a, b) => a.Price.CompareTo(b.Price));
-
-            var bestScore = -1;
-            var bestPrice = double.NaN;
-            var high = Helper.High;
-            var low = Helper.Low;
-            var close = Helper.Close;
-            var scanStart = Math.Max(0, lookbackStart);
-
-            var groupStart = 0;
-
-            while (groupStart < pivots.Count)
-            {
-                var anchor = pivots[groupStart].Price;
-                var groupEnd = groupStart + 1;
-
-                while (groupEnd < pivots.Count && pivots[groupEnd].Price - anchor <= tolerance)
-                {
-                    groupEnd++;
-                }
-
-                var pivotCount = groupEnd - groupStart;
-
-                var priceSum = 0.0;
-                for (int i = groupStart; i < groupEnd; i++)
-                {
-                    priceSum += pivots[i].Price;
-                }
-
-                var groupPrice = priceSum / pivotCount;
-
-                var bounceCount = 0;
-                for (int bar = scanStart; bar < dataLength - 1; bar++)
-                {
-                    var touchesHigh = Math.Abs(high[bar] - groupPrice) <= tolerance;
-                    var touchesLow = Math.Abs(low[bar] - groupPrice) <= tolerance;
-
-                    if (touchesHigh || touchesLow)
-                    {
-                        var nextClose = close[bar + 1];
-                        var movedAway = Math.Abs(nextClose - groupPrice) > tolerance;
-
-                        if (movedAway)
-                        {
-                            bounceCount++;
-                        }
-                    }
-                }
-
-                var score = pivotCount + bounceCount;
-
-                if (score > bestScore)
-                {
-                    bestScore = score;
-                    bestPrice = groupPrice;
-                }
-
-                groupStart = groupEnd;
-            }
-
-            return bestPrice;
-        }
 
         private void CollectProfileLevels(
             AkodeTrendsProfileSettings profile,
@@ -1357,7 +1187,8 @@ namespace Akode.TigerTrade.Indicators
         private void DrawFilteredHorizontalLines(
             List<TrendsCalculationEngine.LevelLine> levels,
             bool isHigh,
-            int dataLength)
+            int dataLength,
+            double priceStep)
         {
             var seriesLength = GetHorizontalSeriesLength(dataLength);
 
@@ -1367,6 +1198,11 @@ namespace Akode.TigerTrade.Indicators
                 if (style == null)
                 {
                     continue;
+                }
+
+                if (Helpers.RoundPriceHelper.IsRoundPrice(level.Price, priceStep, _highlightRoundLevels, _roundLevelStep, _roundLevelToleranceTicks))
+                {
+                    style = isHigh ? _roundHighSeries : _roundLowSeries;
                 }
 
                 var data = CreateSeriesData(seriesLength, level.StartIndex, delegate { return level.Price; });
@@ -1719,6 +1555,33 @@ namespace Akode.TigerTrade.Indicators
             }
 
             return values;
+        }
+
+        private static ChartLine CreateDefaultRoundSeries(bool isHigh)
+        {
+            return new ChartLine
+            {
+                Style = XDashStyle.Solid,
+                Width = 2,
+                Color = isHigh
+                    ? XColor.FromArgb(200, 218, 165, 32)
+                    : XColor.FromArgb(200, 218, 165, 32)
+            };
+        }
+
+        private void EnsureRoundLevelStyles()
+        {
+            if (_roundHighSeries == null)
+            {
+                _roundHighSeries = CreateDefaultRoundSeries(true);
+                _roundHighSeries.PropertyChanged += HandleNestedSettingsChanged;
+            }
+
+            if (_roundLowSeries == null)
+            {
+                _roundLowSeries = CreateDefaultRoundSeries(false);
+                _roundLowSeries.PropertyChanged += HandleNestedSettingsChanged;
+            }
         }
 
         private static ChartLine CloneLine(ChartLine source, XDashStyle style)

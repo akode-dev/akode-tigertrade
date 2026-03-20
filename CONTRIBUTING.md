@@ -6,9 +6,10 @@ Thanks for contributing to this repository.
 
 This repository is designed for multiple TigerTrade indicators.
 
-Implemented indicator in this package:
+Implemented indicators in this package:
 
 - `AkodeLevelsIndicator`
+- `AkodeTrendsIndicator`
 
 New indicator proposals are welcome. Please open an issue first to discuss naming, serialization compatibility, and maintenance expectations.
 

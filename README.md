@@ -43,6 +43,16 @@ It supports aggregation to higher intervals, tracks broken levels, and limits vi
 | High levels | Green line | Style/color for resistance levels. |
 | Low levels | Red line | Style/color for support levels. |
 
+#### Round Levels Settings
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| Highlight round levels | false | Highlight levels on round price numbers with custom style. |
+| Round step | 0 | Price step for round numbers. 0 = auto (tick size × 100). |
+| Round tolerance (ticks) | 0 | Tolerance in ticks: levels near round numbers are treated as round. |
+| Round High levels | Gold line (width 2) | Style/color for round resistance levels. |
+| Round Low levels | Gold line (width 2) | Style/color for round support levels. |
+
 ### Akode Trends (`AkodeTrendsIndicator`)
 
 Multi-profile support/resistance and trendline overlay.
@@ -63,7 +73,6 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 - Trendline merge to deduplicate similar diagonal lines.
 - Independent slope filters for upper and lower trendlines.
 - Optional hiding of trendlines already broken by candle bodies.
-- Base line detection — single strongest horizontal level based on pivot density and confirmed price bounces, with configurable lookback window.
 - Theme/template integration through TigerTrade indicator APIs.
 
 #### Profile Settings (per profile)
@@ -96,6 +105,16 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 | Apply filters to trend lines | true | Whether global level filters also affect trendline input. |
 | Show distance % labels | false | Draw live percent distance to the nearest visible levels directly on the chart. |
 
+#### Round Levels Settings
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| Highlight round levels | false | Highlight levels on round price numbers with custom style. |
+| Round step | 0 | Price step for round numbers. 0 = auto (tick size × 100). |
+| Round tolerance (ticks) | 0 | Tolerance in ticks: levels near round numbers are treated as round. |
+| Round High levels | Gold line (width 2) | Style/color for round resistance levels. |
+| Round Low levels | Gold line (width 2) | Style/color for round support levels. |
+
 #### Trend Lines Settings
 
 | Parameter | Default | Description |
@@ -120,16 +139,6 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 | Trend merge (ticks) | 0 | Merge similar diagonal trendlines within N ticks distance. 0 = disabled. |
 | High trends | Gray line | Style/color for upper trend rays. |
 | Low trends | Gray line | Style/color for lower trend rays. |
-
-#### Base Line Settings
-
-| Parameter | Default | Description |
-| --- | --- | --- |
-| Show base line | false | Enable the base line — single strongest horizontal level. |
-| Tolerance (ticks) | 3 | Tolerance for grouping pivots and detecting price touches. |
-| Lookback (bars) | 0 | Limit evaluation to the last N bars. 0 = full history. |
-| Lookback (minutes) | 0 | Limit evaluation to the last N minutes. 0 = full history. |
-| Base line style | Yellow line (width 3) | Style/color for the base line. |
 
 More indicators can be added to this package over time.
 
@@ -249,5 +258,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, coding standard
 ## License
 
 MIT License. See [LICENSE](LICENSE).
+
+## Disclaimer
+
+This software is provided "as is", without warranty of any kind, express or implied. The author assumes no responsibility or liability for any errors, bugs, data loss, financial loss, or any other damages arising from the use of this software. Use at your own risk.
 
 Tiger Trade is a product of Tiger Trade Capital AG. This repository is independent and not affiliated with Tiger Trade Capital AG.
