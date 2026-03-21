@@ -47,6 +47,7 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AkodeFundingTimerIndicator.cs" />
     <Compile Include="AkodeTrendsIndicator.cs" />
     <Compile Include="AkodeTrendsProfileSettings.cs" />
     <Compile Include="AkodeLevelsIndicator.cs" />

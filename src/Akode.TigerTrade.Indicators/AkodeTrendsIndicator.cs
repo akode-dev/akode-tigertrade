@@ -1295,7 +1295,7 @@ namespace Akode.TigerTrade.Indicators
         private int GetHorizontalSeriesLength(int dataLength)
         {
             var afterBars = Canvas != null ? Math.Max(0, Canvas.AfterBars) : 0;
-            return dataLength + afterBars;
+            return dataLength + afterBars + 5000;
         }
 
         private void DrawDistancePercentLabels(
