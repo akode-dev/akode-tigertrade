@@ -149,6 +149,10 @@ namespace Akode.TigerTrade.Indicators
         [Category("Round levels"), DisplayName("Round Low levels")]
         public ChartLine RoundLowSeries { get; set; }
 
+        [DataMember(Name = "RightPaddingBars"), DefaultValue(500)]
+        [Category("Settings"), DisplayName("Right padding bars")]
+        public int RightPaddingBars { get; set; } = 500;
+
         [DataMember(Name = "ShowDistancePercentLabels"), DefaultValue(false)]
         [Category("Display"), DisplayName("Show distance % labels")]
         public bool ShowDistancePercentLabels { get; set; }
@@ -296,6 +300,7 @@ namespace Akode.TigerTrade.Indicators
                 LowSeries.CopyTheme(i.LowSeries);
             }
 
+            RightPaddingBars = i.RightPaddingBars;
             ShowDistancePercentLabels = i.ShowDistancePercentLabels;
             ShowTestedLines = i.ShowTestedLines;
             MaxTestedLinesHigh = i.MaxTestedLinesHigh;
@@ -545,9 +550,10 @@ namespace Akode.TigerTrade.Indicators
                     style = isHigh ? TestedHighSeries : TestedLowSeries;
                 }
 
-                var data = new double[dataLength];
+                var seriesLength = dataLength + RightPaddingBars;
+                var data = new double[seriesLength];
                 for (int i = 0; i < data.Length; i++) data[i] = double.NaN;
-                for (int i = line.StartIndex; i < dataLength; i++) data[i] = line.Price;
+                for (int i = line.StartIndex; i < seriesLength; i++) data[i] = line.Price;
 
                 var dashStyle = line.IsBroken ? XDashStyle.Dot : line.IsTested ? XDashStyle.Dash : style.Style;
                 var lineStyle = new ChartLine
