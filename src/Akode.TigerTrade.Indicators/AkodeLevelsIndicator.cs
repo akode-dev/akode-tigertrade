@@ -571,7 +571,8 @@ namespace Akode.TigerTrade.Indicators
                 {
                     Style =
                     {
-                        DisableMinMax = true
+                        DisableMinMax = true,
+                        DisableSelect = true
                     }
                 });
             }

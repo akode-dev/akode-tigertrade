@@ -1285,7 +1285,8 @@ namespace Akode.TigerTrade.Indicators
                 {
                     Style =
                     {
-                        DisableMinMax = true
+                        DisableMinMax = true,
+                        DisableSelect = true
                     }
                 });
             }
@@ -1571,7 +1572,8 @@ namespace Akode.TigerTrade.Indicators
                     Style =
                     {
                         DisableMinMax = true,
-                        StraightLine = true
+                        StraightLine = true,
+                        DisableSelect = true
                     }
                 });
             }
