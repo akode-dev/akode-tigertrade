@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-03-21
+
+### Added
+
+- Right padding for level lines in _Akode: Levels — lines now extend 500 bars beyond the last candle to reach the right edge of the chart (configurable via "Right padding bars" setting).
+
+### Fixed
+
+- Disabled selection handles (yellow control points) on all indicator lines — clicking on lines no longer shows draggable squares.
+
 ## [1.4.0] - 2026-03-20
 
 ### Added
