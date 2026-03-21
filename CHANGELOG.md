@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-03-21
+
+### Added
+
+- New indicator _Akode: Funding Timer — draws vertical lines at crypto funding times with configurable hours (default 0,8,16 UTC), time offset, and "show next only" mode.
+- Extend horizontal level lines to the right edge with dynamic buffer (afterBars + 5000) in both _Akode: Levels and _Akode: Trends indicators.
+
+### Fixed
+
+- Disabled selection handles (yellow control points) on indicator lines.
+
 ## [1.5.0] - 2026-03-21
 
 ### Added
