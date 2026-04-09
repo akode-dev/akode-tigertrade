@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-04-09
+
+### Added
+
+- Mature dot color for confirmation dots — point 2 turns green after a configurable number of bars, signaling the level is holding.
+- Gap-to-next-level labels with solid triangles (▲/▼) next to distance percent labels.
+- Configurable font size and bold for both distance and gap labels.
+- Configurable decimal precision for distance % labels.
+- Dedicated timeframe setting for confirmation dots (in minutes), keeping dots stable on lower timeframes.
+
+### Fixed
+
+- Confirmation dot algorithm now picks the globally closest retest bar instead of first-in-zone.
+- Changed Tolerance and Dot size from double to int for TigerTrade property grid compatibility.
+
+### Documentation
+
+- Rewrote Russian documentation (SETTINGS_TRENDS_RU.md, SETTINGS_LEVELS_RU.md) in plain language.
+- Added confirmation dots and distance label sections to both EN and RU docs.
+
 ## [1.7.0] - 2026-04-09
 
 ### Added
