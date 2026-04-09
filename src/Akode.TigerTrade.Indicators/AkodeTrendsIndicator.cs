@@ -40,6 +40,15 @@ namespace Akode.TigerTrade.Indicators
             public double Distance;
         }
 
+        private struct ConfirmedLevelPoint
+        {
+            public double Price;
+            public int Point1Index;
+            public int Point2Index;
+            public bool IsHigh;
+            public XColor Color;
+        }
+
         private AkodeTrendsProfileSettings _profile1;
         private AkodeTrendsProfileSettings _profile2;
         private AkodeTrendsProfileSettings _profile3;
@@ -83,6 +92,12 @@ namespace Akode.TigerTrade.Indicators
         private ChartLine _testedHighSeries;
         private ChartLine _testedLowSeries;
         private List<VisibleHorizontalLevel> _visibleHorizontalLevels;
+        private bool _showConfirmationDots;
+        private double _confirmationTolerancePercent = 0.5;
+        private int _confirmationMinBars = 10;
+        private double _confirmationDotSize = 6.0;
+        private XColor _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
+        private List<ConfirmedLevelPoint> _confirmedLevelPoints;
 
         [Browsable(false)]
         public override IndicatorCalculation Calculation
@@ -422,6 +437,97 @@ namespace Akode.TigerTrade.Indicators
                 _testedLowSeries.PropertyChanged -= HandleNestedSettingsChanged;
                 _testedLowSeries.PropertyChanged += HandleNestedSettingsChanged;
 
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ShowConfirmationDots")]
+        [Category("Confirmation dots"), DisplayName("Show confirmation dots")]
+        public bool ShowConfirmationDots
+        {
+            get { return _showConfirmationDots; }
+            set
+            {
+                if (value == _showConfirmationDots)
+                {
+                    return;
+                }
+
+                _showConfirmationDots = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationTolerancePercent")]
+        [Category("Confirmation dots"), DisplayName("Tolerance (%)")]
+        public double ConfirmationTolerancePercent
+        {
+            get { return _confirmationTolerancePercent; }
+            set
+            {
+                value = Math.Max(0.01, value);
+
+                if (Math.Abs(value - _confirmationTolerancePercent) < double.Epsilon)
+                {
+                    return;
+                }
+
+                _confirmationTolerancePercent = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationMinBars")]
+        [Category("Confirmation dots"), DisplayName("Min bars between touches")]
+        public int ConfirmationMinBars
+        {
+            get { return _confirmationMinBars; }
+            set
+            {
+                value = Math.Max(1, value);
+
+                if (value == _confirmationMinBars)
+                {
+                    return;
+                }
+
+                _confirmationMinBars = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationDotSize")]
+        [Category("Confirmation dots"), DisplayName("Dot size")]
+        public double ConfirmationDotSize
+        {
+            get { return _confirmationDotSize; }
+            set
+            {
+                value = Math.Max(1.0, Math.Min(20.0, value));
+
+                if (Math.Abs(value - _confirmationDotSize) < double.Epsilon)
+                {
+                    return;
+                }
+
+                _confirmationDotSize = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationDotColor")]
+        [Category("Confirmation dots"), DisplayName("Dot color")]
+        public XColor ConfirmationDotColor
+        {
+            get { return _confirmationDotColor; }
+            set
+            {
+                if (value == _confirmationDotColor)
+                {
+                    return;
+                }
+
+                _confirmationDotColor = value;
                 OnPropertyChanged();
             }
         }
@@ -799,6 +905,7 @@ namespace Akode.TigerTrade.Indicators
             EnsureRoundLevelStyles();
             EnsureTestedStyles();
             EnsureVisibleHorizontalLevels();
+            EnsureConfirmedLevelPoints();
         }
 
         [OnDeserialized]
@@ -809,6 +916,7 @@ namespace Akode.TigerTrade.Indicators
             EnsureRoundLevelStyles();
             EnsureTestedStyles();
             EnsureVisibleHorizontalLevels();
+            EnsureConfirmedLevelPoints();
         }
 
         public override void ApplyColors(IChartTheme theme)
@@ -827,6 +935,7 @@ namespace Akode.TigerTrade.Indicators
             RoundLowSeries.CopyTheme(CreateDefaultRoundSeries(false));
             TestedHighSeries.CopyTheme(CreateDefaultTestedSeries(true));
             TestedLowSeries.CopyTheme(CreateDefaultTestedSeries(false));
+            _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
 
             base.ApplyColors(theme);
         }
@@ -878,6 +987,12 @@ namespace Akode.TigerTrade.Indicators
             TestedHighSeries.CopyTheme(source.TestedHighSeries);
             TestedLowSeries.CopyTheme(source.TestedLowSeries);
 
+            ShowConfirmationDots = source.ShowConfirmationDots;
+            ConfirmationTolerancePercent = source.ConfirmationTolerancePercent;
+            ConfirmationMinBars = source.ConfirmationMinBars;
+            ConfirmationDotSize = source.ConfirmationDotSize;
+            ConfirmationDotColor = source.ConfirmationDotColor;
+
             base.CopyTemplate(indicator, style);
         }
 
@@ -908,6 +1023,14 @@ namespace Akode.TigerTrade.Indicators
 
             DrawFilteredHorizontalLines(filteredHigh, true, dataLength, priceStep);
             DrawFilteredHorizontalLines(filteredLow, false, dataLength, priceStep);
+
+            if (_showConfirmationDots)
+            {
+                EnsureConfirmedLevelPoints();
+                _confirmedLevelPoints.Clear();
+                DetectConfirmedLevels(filteredHigh, true);
+                DetectConfirmedLevels(filteredLow, false);
+            }
 
             if (!ShowTrendLines)
             {
@@ -957,21 +1080,28 @@ namespace Akode.TigerTrade.Indicators
 
         public override void Render(DxVisualQueue visual)
         {
+            if (Canvas == null)
+            {
+                return;
+            }
+
             EnsureVisibleHorizontalLevels();
 
-            if (!ShowDistancePercentLabels || _visibleHorizontalLevels.Count == 0 || Canvas == null)
+            if (ShowDistancePercentLabels && _visibleHorizontalLevels.Count > 0)
             {
-                return;
+                var currentPrice = GetCurrentReferencePrice();
+                if (!double.IsNaN(currentPrice) && !double.IsInfinity(currentPrice)
+                    && Math.Abs(currentPrice) > double.Epsilon)
+                {
+                    DrawDistancePercentLabels(visual, currentPrice, true);
+                    DrawDistancePercentLabels(visual, currentPrice, false);
+                }
             }
 
-            var currentPrice = GetCurrentReferencePrice();
-            if (double.IsNaN(currentPrice) || double.IsInfinity(currentPrice) || Math.Abs(currentPrice) < double.Epsilon)
+            if (_showConfirmationDots)
             {
-                return;
+                DrawConfirmedLevelDots(visual);
             }
-
-            DrawDistancePercentLabels(visual, currentPrice, true);
-            DrawDistancePercentLabels(visual, currentPrice, false);
         }
 
         private TrendsCalculationEngine.TrendSelectionResult GetOrComputeTrendSelection(
@@ -1162,6 +1292,92 @@ namespace Akode.TigerTrade.Indicators
             if (_visibleHorizontalLevels == null)
             {
                 _visibleHorizontalLevels = new List<VisibleHorizontalLevel>();
+            }
+        }
+
+        private void EnsureConfirmedLevelPoints()
+        {
+            if (_confirmedLevelPoints == null)
+            {
+                _confirmedLevelPoints = new List<ConfirmedLevelPoint>();
+            }
+        }
+
+        private void DetectConfirmedLevels(
+            List<TrendsCalculationEngine.LevelLine> levels, bool isHigh)
+        {
+            if (levels.Count == 0 || Helper.Count == 0)
+            {
+                return;
+            }
+
+            var high = Helper.High;
+            var low = Helper.Low;
+            var close = Helper.Close;
+
+            foreach (var level in levels)
+            {
+                if (level.IsBroken)
+                {
+                    continue;
+                }
+
+                var result = TrendsCalculationEngine.FindConfirmationRetest(
+                    level.StartIndex, level.Price, isHigh,
+                    _confirmationTolerancePercent, _confirmationMinBars,
+                    high, low, close);
+
+                if (!result.IsConfirmed)
+                {
+                    continue;
+                }
+
+                _confirmedLevelPoints.Add(new ConfirmedLevelPoint
+                {
+                    Price = level.Price,
+                    Point1Index = level.StartIndex,
+                    Point2Index = result.RetestBarIndex,
+                    IsHigh = isHigh,
+                    Color = _confirmationDotColor
+                });
+            }
+        }
+
+        private void DrawConfirmedLevelDots(DxVisualQueue visual)
+        {
+            EnsureConfirmedLevelPoints();
+
+            if (_confirmedLevelPoints.Count == 0)
+            {
+                return;
+            }
+
+            var chartRect = Canvas.Rect;
+            var radius = _confirmationDotSize / 2.0;
+
+            for (int i = 0; i < _confirmedLevelPoints.Count; i++)
+            {
+                var cp = _confirmedLevelPoints[i];
+                var y = GetY(cp.Price);
+
+                if (y < chartRect.Top - radius || y > chartRect.Bottom + radius)
+                {
+                    continue;
+                }
+
+                var brush = new XBrush(cp.Color);
+
+                var x1 = Canvas.GetX(cp.Point1Index);
+                if (x1 >= chartRect.Left - radius && x1 <= chartRect.Right + radius)
+                {
+                    visual.FillEllipse(brush, new Point(x1, y), radius, radius);
+                }
+
+                var x2 = Canvas.GetX(cp.Point2Index);
+                if (x2 >= chartRect.Left - radius && x2 <= chartRect.Right + radius)
+                {
+                    visual.FillEllipse(brush, new Point(x2, y), radius, radius);
+                }
             }
         }
 

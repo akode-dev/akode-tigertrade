@@ -1899,6 +1899,54 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
+        internal struct ConfirmationResult
+        {
+            public int RetestBarIndex;
+            public bool IsConfirmed;
+        }
+
+        internal static ConfirmationResult FindConfirmationRetest(
+            int startIndex, double price, bool isHigh,
+            double tolerancePercent, int minBars,
+            double[] high, double[] low, double[] close)
+        {
+            var tolerance = price * (tolerancePercent / 100.0);
+            var searchStart = startIndex + minBars;
+
+            for (int k = startIndex + 1; k < close.Length; k++)
+            {
+                // If close breaks the level at any point, no confirmation possible
+                if (isHigh ? close[k] > price : close[k] < price)
+                {
+                    return new ConfirmationResult { RetestBarIndex = -1, IsConfirmed = false };
+                }
+
+                if (k < searchStart)
+                {
+                    continue;
+                }
+
+                if (isHigh)
+                {
+                    // Resistance: high approaches from below within tolerance, wick must NOT exceed level
+                    if (high[k] >= price - tolerance && high[k] <= price)
+                    {
+                        return new ConfirmationResult { RetestBarIndex = k, IsConfirmed = true };
+                    }
+                }
+                else
+                {
+                    // Support: low approaches from above within tolerance, wick must NOT go below level
+                    if (low[k] <= price + tolerance && low[k] >= price)
+                    {
+                        return new ConfirmationResult { RetestBarIndex = k, IsConfirmed = true };
+                    }
+                }
+            }
+
+            return new ConfirmationResult { RetestBarIndex = -1, IsConfirmed = false };
+        }
+
         private static double[] BuildBodyHigh(double[] open, double[] close)
         {
             var values = new double[open.Length];
