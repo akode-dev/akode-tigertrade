@@ -115,7 +115,7 @@ namespace Akode.TigerTrade.Indicators
             public double IntersectionIndex { get; set; }
         }
 
-        private sealed class TimeFrameBar
+        internal sealed class TimeFrameBar
         {
             public double High;
             public double Low;
@@ -1719,7 +1719,7 @@ namespace Akode.TigerTrade.Indicators
             return levels;
         }
 
-        private static List<TimeFrameBar> BuildOnTimeframe(
+        internal static List<TimeFrameBar> BuildOnTimeframe(
             double[] date,
             double[] high,
             double[] low,
@@ -1899,40 +1899,48 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
-        internal static List<int> FindAllConfirmationRetests(
+        internal static int FindClosestRetest(
             int startIndex, double price, bool isHigh,
             double tolerancePercent, int minBars,
             double[] high, double[] low, double[] close)
         {
-            var results = new List<int>();
             var tolerance = price * (tolerancePercent / 100.0);
-            var searchStart = startIndex + minBars;
 
+            // Find where the level breaks (close crosses price)
+            var breakIndex = close.Length;
             for (int k = startIndex + 1; k < close.Length; k++)
             {
-                // If close breaks the level, no further retests possible
                 if (isHigh ? close[k] > price : close[k] < price)
                 {
+                    breakIndex = k;
                     break;
-                }
-
-                if (k < searchStart)
-                {
-                    continue;
-                }
-
-                var isRetest = isHigh
-                    ? high[k] >= price - tolerance && high[k] <= price
-                    : low[k] <= price + tolerance && low[k] >= price;
-
-                if (isRetest)
-                {
-                    results.Add(k);
-                    searchStart = k + minBars;
                 }
             }
 
-            return results;
+            // Find the single closest approach after minBars
+            var searchStart = startIndex + minBars;
+            var bestBar = -1;
+            var bestDistance = double.MaxValue;
+
+            for (int k = searchStart; k < breakIndex; k++)
+            {
+                var wickPrice = isHigh ? high[k] : low[k];
+                var withinTolerance = isHigh
+                    ? wickPrice >= price - tolerance && wickPrice <= price
+                    : wickPrice <= price + tolerance && wickPrice >= price;
+
+                if (withinTolerance)
+                {
+                    var distance = Math.Abs(wickPrice - price);
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        bestBar = k;
+                    }
+                }
+            }
+
+            return bestBar;
         }
 
         private static double[] BuildBodyHigh(double[] open, double[] close)

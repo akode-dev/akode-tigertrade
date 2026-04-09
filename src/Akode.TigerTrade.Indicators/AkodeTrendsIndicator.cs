@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Runtime.Serialization;
 using System.Windows;
 using TigerTrade.Chart.Base;
+using TigerTrade.Chart.Base.Enums;
 using TigerTrade.Chart.Indicators.Common;
 using TigerTrade.Chart.Indicators.Drawings;
 using TigerTrade.Chart.Indicators.Enums;
@@ -43,7 +44,8 @@ namespace Akode.TigerTrade.Indicators
         private struct ConfirmedLevelPoint
         {
             public double Price;
-            public List<int> TouchIndices;
+            public int Point1Index;
+            public int Point2Index;
             public bool IsHigh;
             public XColor Color;
         }
@@ -97,6 +99,7 @@ namespace Akode.TigerTrade.Indicators
         private double _confirmationDotSize = 6.0;
         private XColor _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
         private List<ConfirmedLevelPoint> _confirmedLevelPoints;
+        private int _confirmationTimeframeMinutes;
         private int _distancePercentDecimals = 1;
         private int _distanceLabelFontSize = 9;
         private bool _distanceLabelBold;
@@ -587,6 +590,25 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 _confirmationMinBars = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationTimeframeMinutes")]
+        [Category("Confirmation dots"), DisplayName("Timeframe (minutes, 0=chart)")]
+        public int ConfirmationTimeframeMinutes
+        {
+            get { return _confirmationTimeframeMinutes; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _confirmationTimeframeMinutes)
+                {
+                    return;
+                }
+
+                _confirmationTimeframeMinutes = value;
                 OnPropertyChanged();
             }
         }
@@ -1090,6 +1112,7 @@ namespace Akode.TigerTrade.Indicators
             ShowConfirmationDots = source.ShowConfirmationDots;
             ConfirmationTolerancePercent = source.ConfirmationTolerancePercent;
             ConfirmationMinBars = source.ConfirmationMinBars;
+            ConfirmationTimeframeMinutes = source.ConfirmationTimeframeMinutes;
             ConfirmationDotSize = source.ConfirmationDotSize;
             ConfirmationDotColor = source.ConfirmationDotColor;
 
@@ -1411,9 +1434,62 @@ namespace Akode.TigerTrade.Indicators
                 return;
             }
 
-            var high = Helper.High;
-            var low = Helper.Low;
-            var close = Helper.Close;
+            double[] high, low, close;
+            int[] barToAgg = null;
+            List<TrendsCalculationEngine.TimeFrameBar> aggBars = null;
+
+            if (_confirmationTimeframeMinutes > 0 && DataProvider != null && DataProvider.Period != null)
+            {
+                var settings = new AkodeTrendsProfileSettings
+                {
+                    PeriodType = _confirmationTimeframeMinutes >= 60
+                        ? AkodeLevelsPeriodType.Hour
+                        : AkodeLevelsPeriodType.Minute,
+                    PeriodValue = _confirmationTimeframeMinutes >= 60
+                        ? _confirmationTimeframeMinutes / 60
+                        : _confirmationTimeframeMinutes
+                };
+
+                aggBars = TrendsCalculationEngine.BuildOnTimeframe(
+                    Helper.Date, Helper.High, Helper.Low, DataProvider, settings);
+
+                if (aggBars.Count < 2)
+                {
+                    return;
+                }
+
+                // Build aggregated arrays
+                high = new double[aggBars.Count];
+                low = new double[aggBars.Count];
+                close = new double[aggBars.Count];
+                for (int i = 0; i < aggBars.Count; i++)
+                {
+                    high[i] = aggBars[i].High;
+                    low[i] = aggBars[i].Low;
+                    // Close = last candle's close in this timeframe bar
+                    var lastOrigIdx = i + 1 < aggBars.Count
+                        ? aggBars[i + 1].FirstIndex - 1
+                        : Helper.Count - 1;
+                    close[i] = Helper.Close[lastOrigIdx];
+                }
+
+                // Map original bar index → aggregated bar index
+                barToAgg = new int[Helper.Count];
+                for (int a = 0; a < aggBars.Count; a++)
+                {
+                    var end = a + 1 < aggBars.Count ? aggBars[a + 1].FirstIndex : Helper.Count;
+                    for (int j = aggBars[a].FirstIndex; j < end; j++)
+                    {
+                        barToAgg[j] = a;
+                    }
+                }
+            }
+            else
+            {
+                high = Helper.High;
+                low = Helper.Low;
+                close = Helper.Close;
+            }
 
             foreach (var level in levels)
             {
@@ -1422,23 +1498,28 @@ namespace Akode.TigerTrade.Indicators
                     continue;
                 }
 
-                var retests = TrendsCalculationEngine.FindAllConfirmationRetests(
-                    level.StartIndex, level.Price, isHigh,
+                var startIdx = barToAgg != null ? barToAgg[level.StartIndex] : level.StartIndex;
+
+                var retestBar = TrendsCalculationEngine.FindClosestRetest(
+                    startIdx, level.Price, isHigh,
                     _confirmationTolerancePercent, _confirmationMinBars,
                     high, low, close);
 
-                if (retests.Count == 0)
+                if (retestBar < 0)
                 {
                     continue;
                 }
 
-                var touches = new List<int>(retests.Count + 1) { level.StartIndex };
-                touches.AddRange(retests);
+                // Map aggregated index back to original
+                var originalRetest = aggBars != null
+                    ? (isHigh ? aggBars[retestBar].HighIndex : aggBars[retestBar].LowIndex)
+                    : retestBar;
 
                 _confirmedLevelPoints.Add(new ConfirmedLevelPoint
                 {
                     Price = level.Price,
-                    TouchIndices = touches,
+                    Point1Index = level.StartIndex,
+                    Point2Index = originalRetest,
                     IsHigh = isHigh,
                     Color = _confirmationDotColor
                 });
@@ -1471,21 +1552,26 @@ namespace Akode.TigerTrade.Indicators
 
                 var brush = new XBrush(cp.Color);
 
-                for (int t = 0; t < cp.TouchIndices.Count; t++)
+                // Point 1
+                var x1 = Canvas.GetX(cp.Point1Index);
+                if (x1 >= chartRect.Left - radius && x1 <= chartRect.Right + radius)
                 {
-                    var x = Canvas.GetX(cp.TouchIndices[t]);
-                    if (x < chartRect.Left - radius || x > chartRect.Right + radius)
-                    {
-                        continue;
-                    }
+                    visual.FillEllipse(brush, new Point(x1, y), radius, radius);
+                    var numSize1 = numberFont.GetSize("1");
+                    var numY1 = cp.IsHigh ? y - numberOffset - numSize1.Height : y + numberOffset;
+                    visual.DrawString("1", numberFont, brush,
+                        new Rect(x1 - numSize1.Width / 2.0, numY1, numSize1.Width, numSize1.Height));
+                }
 
-                    visual.FillEllipse(brush, new Point(x, y), radius, radius);
-
-                    var number = (t + 1).ToString();
-                    var numSize = numberFont.GetSize(number);
-                    var numY = cp.IsHigh ? y - numberOffset - numSize.Height : y + numberOffset;
-                    var numRect = new Rect(x - numSize.Width / 2.0, numY, numSize.Width, numSize.Height);
-                    visual.DrawString(number, numberFont, brush, numRect);
+                // Point 2
+                var x2 = Canvas.GetX(cp.Point2Index);
+                if (x2 >= chartRect.Left - radius && x2 <= chartRect.Right + radius)
+                {
+                    visual.FillEllipse(brush, new Point(x2, y), radius, radius);
+                    var numSize2 = numberFont.GetSize("2");
+                    var numY2 = cp.IsHigh ? y - numberOffset - numSize2.Height : y + numberOffset;
+                    visual.DrawString("2", numberFont, brush,
+                        new Rect(x2 - numSize2.Width / 2.0, numY2, numSize2.Width, numSize2.Height));
                 }
             }
         }
