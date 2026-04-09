@@ -68,7 +68,7 @@ See [docs/SETTINGS_LEVELS_RU.md](docs/SETTINGS_LEVELS_RU.md) for Russian documen
 
 Multi-profile support/resistance and trendline overlay.
 
-Essentially five `AkodeLevelsIndicator` instances combined into one indicator with a shared trendline engine on top. Each profile works independently (own timeframe, pivot settings, limits, styling), while the trendline algorithm uses their combined levels to draw diagonal support/resistance trend rays.
+Combines up to five independent level-detection profiles into one indicator with a shared trendline engine. Each profile works on its own timeframe and settings, while trendlines are built from the combined levels of all profiles.
 
 #### Features
 
@@ -77,7 +77,8 @@ Essentially five `AkodeLevelsIndicator` instances combined into one indicator wi
 - Per-profile toggle for trendline participation ("Include in trend lines").
 - Tested level detection — wick pierced the level but close held (per-profile toggle).
 - Horizontal levels rendered separately per profile with cross-profile global filters.
-- Optional live percent-distance labels on the chart for the nearest visible support/resistance levels.
+- Optional live percent-distance labels on the chart for the nearest visible support/resistance levels, with gap-to-next-level indicator (▲/▼).
+- Confirmation dots: detects and marks retested levels with numbered dots, with mature-color signal when the retest holds.
 - Round level highlighting with custom style for levels at round price numbers.
 - Global level filters: max total lines, time-based filtering, and merge of nearby levels.
 - Combined upper and lower trend rays built from filtered visible levels.
@@ -122,6 +123,13 @@ See [docs/SETTINGS_TRENDS_RU.md](docs/SETTINGS_TRENDS_RU.md) for Russian documen
 | Level merge (ticks) | 50 | Merge horizontal levels within N ticks of each other, keeping the strongest. 0 = disabled. |
 | Apply filters to trend lines | true | Whether global level filters also affect trendline input. |
 | Show distance % labels | true | Draw live percent distance to the nearest visible levels directly on the chart. |
+| Distance % decimals | 1 | Decimal places in percent labels (1–4). |
+| Distance label font size | 9 | Font size for the main distance label (e.g., +1.5%). |
+| Distance label bold | false | Bold font for the distance label. |
+| Gap label font size | 9 | Font size for the gap-to-next-level label (▲/▼). |
+| Gap label bold | false | Bold font for the gap label. |
+
+Each visible level shows its distance from the current price (e.g., `+1.5%`). If another visible level exists further away, a second label shows the gap to it with a triangle: `▲0.8%` for resistance, `▼0.8%` for support.
 
 #### Round Levels Settings
 
@@ -139,6 +147,26 @@ See [docs/SETTINGS_TRENDS_RU.md](docs/SETTINGS_TRENDS_RU.md) for Russian documen
 | --- | --- | --- |
 | Tested High levels | Green dash | Style/color for tested resistance levels. |
 | Tested Low levels | Red dash | Style/color for tested support levels. |
+
+#### Confirmation Dots
+
+Visually marks levels that have been retested. The indicator places two dots on the horizontal level line:
+
+- **Dot 1** — the bar where the level was formed (pivot).
+- **Dot 2** — the bar where price approached the level closest without breaking through.
+
+After enough bars pass since dot 2, it turns green (configurable), signaling the level is confirmed and holding.
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| Show confirmation dots | false | Toggle confirmation dot display. |
+| Tolerance (x0.1%) | 5 | Approach tolerance. Value 5 = 0.5%, 10 = 1.0%. Price must approach the level within tolerance but not cross it (even by wick). |
+| Min bars between touches | 10 | Minimum candles between dot 1 and dot 2. |
+| Timeframe (minutes, 0=chart) | 0 | Dedicated timeframe for dot calculation (in minutes). 0 = use chart timeframe. Useful to keep dots stable when switching to lower timeframes. |
+| Dot size | 6 | Dot diameter in pixels. |
+| Dot color | Cyan | Color for dot 1 and dot 2 while it is fresh. |
+| Mature after bars | 5 | Bars after dot 2 before it changes color. |
+| Mature dot color | Green | Color for dot 2 once it has matured — signals a confirmed level. |
 
 #### Trend Lines Settings
 

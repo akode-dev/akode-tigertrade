@@ -94,12 +94,14 @@ namespace Akode.TigerTrade.Indicators
         private ChartLine _testedLowSeries;
         private List<VisibleHorizontalLevel> _visibleHorizontalLevels;
         private bool _showConfirmationDots;
-        private double _confirmationTolerancePercent = 0.5;
+        private int _confirmationToleranceTenths = 5;
         private int _confirmationMinBars = 10;
-        private double _confirmationDotSize = 6.0;
+        private int _confirmationDotSize = 6;
         private XColor _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
         private List<ConfirmedLevelPoint> _confirmedLevelPoints;
         private int _confirmationTimeframeMinutes;
+        private int _confirmationMatureBars = 5;
+        private XColor _confirmationMatureColor = XColor.FromArgb(255, 0, 200, 0);
         private int _distancePercentDecimals = 1;
         private int _distanceLabelFontSize = 9;
         private bool _distanceLabelBold;
@@ -556,21 +558,21 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
-        [DataMember(Name = "ConfirmationTolerancePercent")]
-        [Category("Confirmation dots"), DisplayName("Tolerance (%)")]
-        public double ConfirmationTolerancePercent
+        [DataMember(Name = "ConfirmationToleranceTenths")]
+        [Category("Confirmation dots"), DisplayName("Tolerance (x0.1%)")]
+        public int ConfirmationToleranceTenths
         {
-            get { return _confirmationTolerancePercent; }
+            get { return _confirmationToleranceTenths; }
             set
             {
-                value = Math.Max(0.01, value);
+                value = Math.Max(1, value);
 
-                if (Math.Abs(value - _confirmationTolerancePercent) < double.Epsilon)
+                if (value == _confirmationToleranceTenths)
                 {
                     return;
                 }
 
-                _confirmationTolerancePercent = value;
+                _confirmationToleranceTenths = value;
                 OnPropertyChanged();
             }
         }
@@ -615,14 +617,14 @@ namespace Akode.TigerTrade.Indicators
 
         [DataMember(Name = "ConfirmationDotSize")]
         [Category("Confirmation dots"), DisplayName("Dot size")]
-        public double ConfirmationDotSize
+        public int ConfirmationDotSize
         {
             get { return _confirmationDotSize; }
             set
             {
-                value = Math.Max(1.0, Math.Min(20.0, value));
+                value = Math.Max(1, Math.Min(20, value));
 
-                if (Math.Abs(value - _confirmationDotSize) < double.Epsilon)
+                if (value == _confirmationDotSize)
                 {
                     return;
                 }
@@ -645,6 +647,42 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 _confirmationDotColor = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationMatureBars")]
+        [Category("Confirmation dots"), DisplayName("Mature after bars")]
+        public int ConfirmationMatureBars
+        {
+            get { return _confirmationMatureBars; }
+            set
+            {
+                value = Math.Max(1, Math.Min(1000, value));
+
+                if (value == _confirmationMatureBars)
+                {
+                    return;
+                }
+
+                _confirmationMatureBars = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationMatureColor")]
+        [Category("Confirmation dots"), DisplayName("Mature dot color")]
+        public XColor ConfirmationMatureColor
+        {
+            get { return _confirmationMatureColor; }
+            set
+            {
+                if (value == _confirmationMatureColor)
+                {
+                    return;
+                }
+
+                _confirmationMatureColor = value;
                 OnPropertyChanged();
             }
         }
@@ -1053,6 +1091,7 @@ namespace Akode.TigerTrade.Indicators
             TestedHighSeries.CopyTheme(CreateDefaultTestedSeries(true));
             TestedLowSeries.CopyTheme(CreateDefaultTestedSeries(false));
             _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
+            _confirmationMatureColor = XColor.FromArgb(255, 0, 200, 0);
 
             base.ApplyColors(theme);
         }
@@ -1110,11 +1149,13 @@ namespace Akode.TigerTrade.Indicators
             TestedLowSeries.CopyTheme(source.TestedLowSeries);
 
             ShowConfirmationDots = source.ShowConfirmationDots;
-            ConfirmationTolerancePercent = source.ConfirmationTolerancePercent;
+            ConfirmationToleranceTenths = source.ConfirmationToleranceTenths;
             ConfirmationMinBars = source.ConfirmationMinBars;
             ConfirmationTimeframeMinutes = source.ConfirmationTimeframeMinutes;
             ConfirmationDotSize = source.ConfirmationDotSize;
             ConfirmationDotColor = source.ConfirmationDotColor;
+            ConfirmationMatureBars = source.ConfirmationMatureBars;
+            ConfirmationMatureColor = source.ConfirmationMatureColor;
 
             base.CopyTemplate(indicator, style);
         }
@@ -1502,7 +1543,7 @@ namespace Akode.TigerTrade.Indicators
 
                 var retestBar = TrendsCalculationEngine.FindClosestRetest(
                     startIdx, level.Price, isHigh,
-                    _confirmationTolerancePercent, _confirmationMinBars,
+                    _confirmationToleranceTenths / 10.0, _confirmationMinBars,
                     high, low, close);
 
                 if (retestBar < 0)
@@ -1551,6 +1592,8 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 var brush = new XBrush(cp.Color);
+                var isMature = (Helper.Count - 1 - cp.Point2Index) >= _confirmationMatureBars;
+                var point2Brush = isMature ? new XBrush(_confirmationMatureColor) : brush;
 
                 // Point 1
                 var x1 = Canvas.GetX(cp.Point1Index);
@@ -1567,10 +1610,10 @@ namespace Akode.TigerTrade.Indicators
                 var x2 = Canvas.GetX(cp.Point2Index);
                 if (x2 >= chartRect.Left - radius && x2 <= chartRect.Right + radius)
                 {
-                    visual.FillEllipse(brush, new Point(x2, y), radius, radius);
+                    visual.FillEllipse(point2Brush, new Point(x2, y), radius, radius);
                     var numSize2 = numberFont.GetSize("2");
                     var numY2 = cp.IsHigh ? y - numberOffset - numSize2.Height : y + numberOffset;
-                    visual.DrawString("2", numberFont, brush,
+                    visual.DrawString("2", numberFont, point2Brush,
                         new Rect(x2 - numSize2.Width / 2.0, numY2, numSize2.Width, numSize2.Height));
                 }
             }
