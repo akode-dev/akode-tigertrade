@@ -1899,26 +1899,21 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
-        internal struct ConfirmationResult
-        {
-            public int RetestBarIndex;
-            public bool IsConfirmed;
-        }
-
-        internal static ConfirmationResult FindConfirmationRetest(
+        internal static List<int> FindAllConfirmationRetests(
             int startIndex, double price, bool isHigh,
             double tolerancePercent, int minBars,
             double[] high, double[] low, double[] close)
         {
+            var results = new List<int>();
             var tolerance = price * (tolerancePercent / 100.0);
             var searchStart = startIndex + minBars;
 
             for (int k = startIndex + 1; k < close.Length; k++)
             {
-                // If close breaks the level at any point, no confirmation possible
+                // If close breaks the level, no further retests possible
                 if (isHigh ? close[k] > price : close[k] < price)
                 {
-                    return new ConfirmationResult { RetestBarIndex = -1, IsConfirmed = false };
+                    break;
                 }
 
                 if (k < searchStart)
@@ -1926,25 +1921,18 @@ namespace Akode.TigerTrade.Indicators
                     continue;
                 }
 
-                if (isHigh)
+                var isRetest = isHigh
+                    ? high[k] >= price - tolerance && high[k] <= price
+                    : low[k] <= price + tolerance && low[k] >= price;
+
+                if (isRetest)
                 {
-                    // Resistance: high approaches from below within tolerance, wick must NOT exceed level
-                    if (high[k] >= price - tolerance && high[k] <= price)
-                    {
-                        return new ConfirmationResult { RetestBarIndex = k, IsConfirmed = true };
-                    }
-                }
-                else
-                {
-                    // Support: low approaches from above within tolerance, wick must NOT go below level
-                    if (low[k] <= price + tolerance && low[k] >= price)
-                    {
-                        return new ConfirmationResult { RetestBarIndex = k, IsConfirmed = true };
-                    }
+                    results.Add(k);
+                    searchStart = k + minBars;
                 }
             }
 
-            return new ConfirmationResult { RetestBarIndex = -1, IsConfirmed = false };
+            return results;
         }
 
         private static double[] BuildBodyHigh(double[] open, double[] close)

@@ -43,8 +43,7 @@ namespace Akode.TigerTrade.Indicators
         private struct ConfirmedLevelPoint
         {
             public double Price;
-            public int Point1Index;
-            public int Point2Index;
+            public List<int> TouchIndices;
             public bool IsHigh;
             public XColor Color;
         }
@@ -98,6 +97,11 @@ namespace Akode.TigerTrade.Indicators
         private double _confirmationDotSize = 6.0;
         private XColor _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
         private List<ConfirmedLevelPoint> _confirmedLevelPoints;
+        private int _distancePercentDecimals = 1;
+        private int _distanceLabelFontSize = 9;
+        private bool _distanceLabelBold;
+        private int _gapLabelFontSize = 9;
+        private bool _gapLabelBold;
 
         [Browsable(false)]
         public override IndicatorCalculation Calculation
@@ -286,6 +290,97 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 _showDistancePercentLabels = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "DistancePercentDecimals")]
+        [Category("Level lines"), DisplayName("Distance % decimals")]
+        public int DistancePercentDecimals
+        {
+            get { return _distancePercentDecimals; }
+            set
+            {
+                value = Math.Max(1, Math.Min(4, value));
+
+                if (value == _distancePercentDecimals)
+                {
+                    return;
+                }
+
+                _distancePercentDecimals = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "DistanceLabelFontSize")]
+        [Category("Level lines"), DisplayName("Distance label font size")]
+        public int DistanceLabelFontSize
+        {
+            get { return _distanceLabelFontSize; }
+            set
+            {
+                value = Math.Max(6, Math.Min(30, value));
+
+                if (value == _distanceLabelFontSize)
+                {
+                    return;
+                }
+
+                _distanceLabelFontSize = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "DistanceLabelBold")]
+        [Category("Level lines"), DisplayName("Distance label bold")]
+        public bool DistanceLabelBold
+        {
+            get { return _distanceLabelBold; }
+            set
+            {
+                if (value == _distanceLabelBold)
+                {
+                    return;
+                }
+
+                _distanceLabelBold = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "GapLabelFontSize")]
+        [Category("Level lines"), DisplayName("Gap label font size")]
+        public int GapLabelFontSize
+        {
+            get { return _gapLabelFontSize; }
+            set
+            {
+                value = Math.Max(6, Math.Min(30, value));
+
+                if (value == _gapLabelFontSize)
+                {
+                    return;
+                }
+
+                _gapLabelFontSize = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "GapLabelBold")]
+        [Category("Level lines"), DisplayName("Gap label bold")]
+        public bool GapLabelBold
+        {
+            get { return _gapLabelBold; }
+            set
+            {
+                if (value == _gapLabelBold)
+                {
+                    return;
+                }
+
+                _gapLabelBold = value;
                 OnPropertyChanged();
             }
         }
@@ -956,6 +1051,11 @@ namespace Akode.TigerTrade.Indicators
             LevelMergeDistanceTicks = source.LevelMergeDistanceTicks;
             ApplyLevelFiltersToTrendlines = source.ApplyLevelFiltersToTrendlines;
             ShowDistancePercentLabels = source.ShowDistancePercentLabels;
+            DistancePercentDecimals = source.DistancePercentDecimals;
+            DistanceLabelFontSize = source.DistanceLabelFontSize;
+            DistanceLabelBold = source.DistanceLabelBold;
+            GapLabelFontSize = source.GapLabelFontSize;
+            GapLabelBold = source.GapLabelBold;
 
             ShowTrendLines = source.ShowTrendLines;
             MaxHighTrendLines = source.MaxHighTrendLines;
@@ -1322,21 +1422,23 @@ namespace Akode.TigerTrade.Indicators
                     continue;
                 }
 
-                var result = TrendsCalculationEngine.FindConfirmationRetest(
+                var retests = TrendsCalculationEngine.FindAllConfirmationRetests(
                     level.StartIndex, level.Price, isHigh,
                     _confirmationTolerancePercent, _confirmationMinBars,
                     high, low, close);
 
-                if (!result.IsConfirmed)
+                if (retests.Count == 0)
                 {
                     continue;
                 }
 
+                var touches = new List<int>(retests.Count + 1) { level.StartIndex };
+                touches.AddRange(retests);
+
                 _confirmedLevelPoints.Add(new ConfirmedLevelPoint
                 {
                     Price = level.Price,
-                    Point1Index = level.StartIndex,
-                    Point2Index = result.RetestBarIndex,
+                    TouchIndices = touches,
                     IsHigh = isHigh,
                     Color = _confirmationDotColor
                 });
@@ -1354,29 +1456,36 @@ namespace Akode.TigerTrade.Indicators
 
             var chartRect = Canvas.Rect;
             var radius = _confirmationDotSize / 2.0;
+            var numberFont = new XFont(Canvas.ChartFont.Name, _confirmationDotSize + 2.0);
+            var numberOffset = radius + 2.0;
 
             for (int i = 0; i < _confirmedLevelPoints.Count; i++)
             {
                 var cp = _confirmedLevelPoints[i];
                 var y = GetY(cp.Price);
 
-                if (y < chartRect.Top - radius || y > chartRect.Bottom + radius)
+                if (y < chartRect.Top - radius - 20 || y > chartRect.Bottom + radius + 20)
                 {
                     continue;
                 }
 
                 var brush = new XBrush(cp.Color);
 
-                var x1 = Canvas.GetX(cp.Point1Index);
-                if (x1 >= chartRect.Left - radius && x1 <= chartRect.Right + radius)
+                for (int t = 0; t < cp.TouchIndices.Count; t++)
                 {
-                    visual.FillEllipse(brush, new Point(x1, y), radius, radius);
-                }
+                    var x = Canvas.GetX(cp.TouchIndices[t]);
+                    if (x < chartRect.Left - radius || x > chartRect.Right + radius)
+                    {
+                        continue;
+                    }
 
-                var x2 = Canvas.GetX(cp.Point2Index);
-                if (x2 >= chartRect.Left - radius && x2 <= chartRect.Right + radius)
-                {
-                    visual.FillEllipse(brush, new Point(x2, y), radius, radius);
+                    visual.FillEllipse(brush, new Point(x, y), radius, radius);
+
+                    var number = (t + 1).ToString();
+                    var numSize = numberFont.GetSize(number);
+                    var numY = cp.IsHigh ? y - numberOffset - numSize.Height : y + numberOffset;
+                    var numRect = new Rect(x - numSize.Width / 2.0, numY, numSize.Width, numSize.Height);
+                    visual.DrawString(number, numberFont, brush, numRect);
                 }
             }
         }
@@ -1560,20 +1669,41 @@ namespace Akode.TigerTrade.Indicators
                 return cmp != 0 ? cmp : b.Level.StartIndex.CompareTo(a.Level.StartIndex);
             });
 
-            var font = Canvas.ChartFont;
+            var baseFontName = Canvas.ChartFont.Name;
+            var font = new XFont(baseFontName, _distanceLabelFontSize, _distanceLabelBold);
+            var gapFont = new XFont(baseFontName, _gapLabelFontSize, _gapLabelBold);
             var acceptedRects = new List<Rect>(MaxDistancePercentLabelsPerSide);
             var chartRect = Canvas.Rect;
             var acceptedCount = 0;
 
             for (int i = 0; i < candidates.Count && acceptedCount < MaxDistancePercentLabelsPerSide; i++)
             {
-                var text = FormatDistancePercent(candidates[i].Level.Price, currentPrice);
+                var text = FormatDistancePercent(candidates[i].Level.Price, currentPrice, _distancePercentDecimals);
                 if (string.IsNullOrEmpty(text))
                 {
                     continue;
                 }
 
-                var size = font.GetSize(text);
+                string gapText = null;
+                if (i + 1 < candidates.Count)
+                {
+                    var gap = Math.Abs(candidates[i + 1].Level.Price - candidates[i].Level.Price);
+                    var gapPercent = (gap / currentPrice) * 100.0;
+                    if (!double.IsNaN(gapPercent) && !double.IsInfinity(gapPercent))
+                    {
+                        var triangle = highSide ? "\u25B2" : "\u25BC";
+                        var fmt = "0." + new string('0', _distancePercentDecimals);
+                        gapText = triangle + gapPercent.ToString(fmt) + "%";
+                    }
+                }
+
+                var mainSize = font.GetSize(text);
+                var gapSize = gapText != null ? gapFont.GetSize(gapText) : new Size(0, 0);
+                var gapSpacing = gapText != null ? DistancePercentLabelPadding : 0.0;
+                var totalWidth = mainSize.Width + gapSpacing + gapSize.Width;
+                var totalHeight = Math.Max(mainSize.Height, gapSize.Height);
+                var size = new Size(totalWidth, totalHeight);
+
                 var lineY = GetY(candidates[i].Level.Price);
                 var x = chartRect.Right - size.Width - DistancePercentLabelPadding;
                 var y = lineY - size.Height - DistancePercentLabelLineGap;
@@ -1620,11 +1750,18 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 acceptedRects.Add(labelRect);
-                visual.DrawString(
-                    text,
-                    font,
-                    new XBrush(candidates[i].Level.Color),
-                    labelRect);
+                var brush = new XBrush(candidates[i].Level.Color);
+                var mainRect = new Rect(x, y, mainSize.Width, mainSize.Height);
+                visual.DrawString(text, font, brush, mainRect);
+
+                if (gapText != null)
+                {
+                    var gapX = x + mainSize.Width + gapSpacing;
+                    var gapY = y + (mainSize.Height - gapSize.Height);
+                    var gapRect = new Rect(gapX, gapY, gapSize.Width, gapSize.Height);
+                    visual.DrawString(gapText, gapFont, brush, gapRect);
+                }
+
                 acceptedCount++;
             }
         }
@@ -1668,7 +1805,7 @@ namespace Akode.TigerTrade.Indicators
             return y >= rect.Top && y <= rect.Bottom;
         }
 
-        private static string FormatDistancePercent(double levelPrice, double currentPrice)
+        private static string FormatDistancePercent(double levelPrice, double currentPrice, int decimals)
         {
             var percent = ((levelPrice - currentPrice) / currentPrice) * 100.0;
             if (double.IsNaN(percent) || double.IsInfinity(percent))
@@ -1676,7 +1813,10 @@ namespace Akode.TigerTrade.Indicators
                 return null;
             }
 
-            return percent.ToString("+0.00;-0.00;0.00") + "%";
+            var fmt = "0." + new string('0', decimals);
+            var posFmt = "+" + fmt;
+            var negFmt = "-" + fmt;
+            return percent.ToString(posFmt + ";" + negFmt + ";" + fmt) + "%";
         }
 
         private static AkodeTrendlineAlgorithm NormalizeTrendlineAlgorithm(AkodeTrendlineAlgorithm value)
