@@ -100,6 +100,8 @@ namespace Akode.TigerTrade.Indicators
         private XColor _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
         private List<ConfirmedLevelPoint> _confirmedLevelPoints;
         private int _confirmationTimeframeMinutes;
+        private int _confirmationMatureBars = 5;
+        private XColor _confirmationMatureColor = XColor.FromArgb(255, 0, 200, 0);
         private int _distancePercentDecimals = 1;
         private int _distanceLabelFontSize = 9;
         private bool _distanceLabelBold;
@@ -649,6 +651,42 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
+        [DataMember(Name = "ConfirmationMatureBars")]
+        [Category("Confirmation dots"), DisplayName("Mature after bars")]
+        public int ConfirmationMatureBars
+        {
+            get { return _confirmationMatureBars; }
+            set
+            {
+                value = Math.Max(1, Math.Min(1000, value));
+
+                if (value == _confirmationMatureBars)
+                {
+                    return;
+                }
+
+                _confirmationMatureBars = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationMatureColor")]
+        [Category("Confirmation dots"), DisplayName("Mature dot color")]
+        public XColor ConfirmationMatureColor
+        {
+            get { return _confirmationMatureColor; }
+            set
+            {
+                if (value == _confirmationMatureColor)
+                {
+                    return;
+                }
+
+                _confirmationMatureColor = value;
+                OnPropertyChanged();
+            }
+        }
+
         [DataMember(Name = "ShowTrendLines")]
         [Category("Trend lines"), DisplayName("Show trend lines")]
         public bool ShowTrendLines
@@ -1053,6 +1091,7 @@ namespace Akode.TigerTrade.Indicators
             TestedHighSeries.CopyTheme(CreateDefaultTestedSeries(true));
             TestedLowSeries.CopyTheme(CreateDefaultTestedSeries(false));
             _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
+            _confirmationMatureColor = XColor.FromArgb(255, 0, 200, 0);
 
             base.ApplyColors(theme);
         }
@@ -1115,6 +1154,8 @@ namespace Akode.TigerTrade.Indicators
             ConfirmationTimeframeMinutes = source.ConfirmationTimeframeMinutes;
             ConfirmationDotSize = source.ConfirmationDotSize;
             ConfirmationDotColor = source.ConfirmationDotColor;
+            ConfirmationMatureBars = source.ConfirmationMatureBars;
+            ConfirmationMatureColor = source.ConfirmationMatureColor;
 
             base.CopyTemplate(indicator, style);
         }
@@ -1551,6 +1592,8 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 var brush = new XBrush(cp.Color);
+                var isMature = (Helper.Count - 1 - cp.Point2Index) >= _confirmationMatureBars;
+                var point2Brush = isMature ? new XBrush(_confirmationMatureColor) : brush;
 
                 // Point 1
                 var x1 = Canvas.GetX(cp.Point1Index);
@@ -1567,10 +1610,10 @@ namespace Akode.TigerTrade.Indicators
                 var x2 = Canvas.GetX(cp.Point2Index);
                 if (x2 >= chartRect.Left - radius && x2 <= chartRect.Right + radius)
                 {
-                    visual.FillEllipse(brush, new Point(x2, y), radius, radius);
+                    visual.FillEllipse(point2Brush, new Point(x2, y), radius, radius);
                     var numSize2 = numberFont.GetSize("2");
                     var numY2 = cp.IsHigh ? y - numberOffset - numSize2.Height : y + numberOffset;
-                    visual.DrawString("2", numberFont, brush,
+                    visual.DrawString("2", numberFont, point2Brush,
                         new Rect(x2 - numSize2.Width / 2.0, numY2, numSize2.Width, numSize2.Height));
                 }
             }
