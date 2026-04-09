@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Runtime.Serialization;
 using System.Windows;
 using TigerTrade.Chart.Base;
+using TigerTrade.Chart.Base.Enums;
 using TigerTrade.Chart.Indicators.Common;
 using TigerTrade.Chart.Indicators.Drawings;
 using TigerTrade.Chart.Indicators.Enums;
@@ -38,6 +39,15 @@ namespace Akode.TigerTrade.Indicators
         {
             public VisibleHorizontalLevel Level;
             public double Distance;
+        }
+
+        private struct ConfirmedLevelPoint
+        {
+            public double Price;
+            public int Point1Index;
+            public int Point2Index;
+            public bool IsHigh;
+            public XColor Color;
         }
 
         private AkodeTrendsProfileSettings _profile1;
@@ -83,6 +93,18 @@ namespace Akode.TigerTrade.Indicators
         private ChartLine _testedHighSeries;
         private ChartLine _testedLowSeries;
         private List<VisibleHorizontalLevel> _visibleHorizontalLevels;
+        private bool _showConfirmationDots;
+        private double _confirmationTolerancePercent = 0.5;
+        private int _confirmationMinBars = 10;
+        private double _confirmationDotSize = 6.0;
+        private XColor _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
+        private List<ConfirmedLevelPoint> _confirmedLevelPoints;
+        private int _confirmationTimeframeMinutes;
+        private int _distancePercentDecimals = 1;
+        private int _distanceLabelFontSize = 9;
+        private bool _distanceLabelBold;
+        private int _gapLabelFontSize = 9;
+        private bool _gapLabelBold;
 
         [Browsable(false)]
         public override IndicatorCalculation Calculation
@@ -275,6 +297,97 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
+        [DataMember(Name = "DistancePercentDecimals")]
+        [Category("Level lines"), DisplayName("Distance % decimals")]
+        public int DistancePercentDecimals
+        {
+            get { return _distancePercentDecimals; }
+            set
+            {
+                value = Math.Max(1, Math.Min(4, value));
+
+                if (value == _distancePercentDecimals)
+                {
+                    return;
+                }
+
+                _distancePercentDecimals = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "DistanceLabelFontSize")]
+        [Category("Level lines"), DisplayName("Distance label font size")]
+        public int DistanceLabelFontSize
+        {
+            get { return _distanceLabelFontSize; }
+            set
+            {
+                value = Math.Max(6, Math.Min(30, value));
+
+                if (value == _distanceLabelFontSize)
+                {
+                    return;
+                }
+
+                _distanceLabelFontSize = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "DistanceLabelBold")]
+        [Category("Level lines"), DisplayName("Distance label bold")]
+        public bool DistanceLabelBold
+        {
+            get { return _distanceLabelBold; }
+            set
+            {
+                if (value == _distanceLabelBold)
+                {
+                    return;
+                }
+
+                _distanceLabelBold = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "GapLabelFontSize")]
+        [Category("Level lines"), DisplayName("Gap label font size")]
+        public int GapLabelFontSize
+        {
+            get { return _gapLabelFontSize; }
+            set
+            {
+                value = Math.Max(6, Math.Min(30, value));
+
+                if (value == _gapLabelFontSize)
+                {
+                    return;
+                }
+
+                _gapLabelFontSize = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "GapLabelBold")]
+        [Category("Level lines"), DisplayName("Gap label bold")]
+        public bool GapLabelBold
+        {
+            get { return _gapLabelBold; }
+            set
+            {
+                if (value == _gapLabelBold)
+                {
+                    return;
+                }
+
+                _gapLabelBold = value;
+                OnPropertyChanged();
+            }
+        }
+
         [DataMember(Name = "HighlightRoundLevels")]
         [Category("Round levels"), DisplayName("Highlight round levels")]
         public bool HighlightRoundLevels
@@ -422,6 +535,116 @@ namespace Akode.TigerTrade.Indicators
                 _testedLowSeries.PropertyChanged -= HandleNestedSettingsChanged;
                 _testedLowSeries.PropertyChanged += HandleNestedSettingsChanged;
 
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ShowConfirmationDots")]
+        [Category("Confirmation dots"), DisplayName("Show confirmation dots")]
+        public bool ShowConfirmationDots
+        {
+            get { return _showConfirmationDots; }
+            set
+            {
+                if (value == _showConfirmationDots)
+                {
+                    return;
+                }
+
+                _showConfirmationDots = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationTolerancePercent")]
+        [Category("Confirmation dots"), DisplayName("Tolerance (%)")]
+        public double ConfirmationTolerancePercent
+        {
+            get { return _confirmationTolerancePercent; }
+            set
+            {
+                value = Math.Max(0.01, value);
+
+                if (Math.Abs(value - _confirmationTolerancePercent) < double.Epsilon)
+                {
+                    return;
+                }
+
+                _confirmationTolerancePercent = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationMinBars")]
+        [Category("Confirmation dots"), DisplayName("Min bars between touches")]
+        public int ConfirmationMinBars
+        {
+            get { return _confirmationMinBars; }
+            set
+            {
+                value = Math.Max(1, value);
+
+                if (value == _confirmationMinBars)
+                {
+                    return;
+                }
+
+                _confirmationMinBars = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationTimeframeMinutes")]
+        [Category("Confirmation dots"), DisplayName("Timeframe (minutes, 0=chart)")]
+        public int ConfirmationTimeframeMinutes
+        {
+            get { return _confirmationTimeframeMinutes; }
+            set
+            {
+                value = Math.Max(0, value);
+
+                if (value == _confirmationTimeframeMinutes)
+                {
+                    return;
+                }
+
+                _confirmationTimeframeMinutes = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationDotSize")]
+        [Category("Confirmation dots"), DisplayName("Dot size")]
+        public double ConfirmationDotSize
+        {
+            get { return _confirmationDotSize; }
+            set
+            {
+                value = Math.Max(1.0, Math.Min(20.0, value));
+
+                if (Math.Abs(value - _confirmationDotSize) < double.Epsilon)
+                {
+                    return;
+                }
+
+                _confirmationDotSize = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [DataMember(Name = "ConfirmationDotColor")]
+        [Category("Confirmation dots"), DisplayName("Dot color")]
+        public XColor ConfirmationDotColor
+        {
+            get { return _confirmationDotColor; }
+            set
+            {
+                if (value == _confirmationDotColor)
+                {
+                    return;
+                }
+
+                _confirmationDotColor = value;
                 OnPropertyChanged();
             }
         }
@@ -799,6 +1022,7 @@ namespace Akode.TigerTrade.Indicators
             EnsureRoundLevelStyles();
             EnsureTestedStyles();
             EnsureVisibleHorizontalLevels();
+            EnsureConfirmedLevelPoints();
         }
 
         [OnDeserialized]
@@ -809,6 +1033,7 @@ namespace Akode.TigerTrade.Indicators
             EnsureRoundLevelStyles();
             EnsureTestedStyles();
             EnsureVisibleHorizontalLevels();
+            EnsureConfirmedLevelPoints();
         }
 
         public override void ApplyColors(IChartTheme theme)
@@ -827,6 +1052,7 @@ namespace Akode.TigerTrade.Indicators
             RoundLowSeries.CopyTheme(CreateDefaultRoundSeries(false));
             TestedHighSeries.CopyTheme(CreateDefaultTestedSeries(true));
             TestedLowSeries.CopyTheme(CreateDefaultTestedSeries(false));
+            _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
 
             base.ApplyColors(theme);
         }
@@ -847,6 +1073,11 @@ namespace Akode.TigerTrade.Indicators
             LevelMergeDistanceTicks = source.LevelMergeDistanceTicks;
             ApplyLevelFiltersToTrendlines = source.ApplyLevelFiltersToTrendlines;
             ShowDistancePercentLabels = source.ShowDistancePercentLabels;
+            DistancePercentDecimals = source.DistancePercentDecimals;
+            DistanceLabelFontSize = source.DistanceLabelFontSize;
+            DistanceLabelBold = source.DistanceLabelBold;
+            GapLabelFontSize = source.GapLabelFontSize;
+            GapLabelBold = source.GapLabelBold;
 
             ShowTrendLines = source.ShowTrendLines;
             MaxHighTrendLines = source.MaxHighTrendLines;
@@ -878,6 +1109,13 @@ namespace Akode.TigerTrade.Indicators
             TestedHighSeries.CopyTheme(source.TestedHighSeries);
             TestedLowSeries.CopyTheme(source.TestedLowSeries);
 
+            ShowConfirmationDots = source.ShowConfirmationDots;
+            ConfirmationTolerancePercent = source.ConfirmationTolerancePercent;
+            ConfirmationMinBars = source.ConfirmationMinBars;
+            ConfirmationTimeframeMinutes = source.ConfirmationTimeframeMinutes;
+            ConfirmationDotSize = source.ConfirmationDotSize;
+            ConfirmationDotColor = source.ConfirmationDotColor;
+
             base.CopyTemplate(indicator, style);
         }
 
@@ -908,6 +1146,14 @@ namespace Akode.TigerTrade.Indicators
 
             DrawFilteredHorizontalLines(filteredHigh, true, dataLength, priceStep);
             DrawFilteredHorizontalLines(filteredLow, false, dataLength, priceStep);
+
+            if (_showConfirmationDots)
+            {
+                EnsureConfirmedLevelPoints();
+                _confirmedLevelPoints.Clear();
+                DetectConfirmedLevels(filteredHigh, true);
+                DetectConfirmedLevels(filteredLow, false);
+            }
 
             if (!ShowTrendLines)
             {
@@ -957,21 +1203,28 @@ namespace Akode.TigerTrade.Indicators
 
         public override void Render(DxVisualQueue visual)
         {
+            if (Canvas == null)
+            {
+                return;
+            }
+
             EnsureVisibleHorizontalLevels();
 
-            if (!ShowDistancePercentLabels || _visibleHorizontalLevels.Count == 0 || Canvas == null)
+            if (ShowDistancePercentLabels && _visibleHorizontalLevels.Count > 0)
             {
-                return;
+                var currentPrice = GetCurrentReferencePrice();
+                if (!double.IsNaN(currentPrice) && !double.IsInfinity(currentPrice)
+                    && Math.Abs(currentPrice) > double.Epsilon)
+                {
+                    DrawDistancePercentLabels(visual, currentPrice, true);
+                    DrawDistancePercentLabels(visual, currentPrice, false);
+                }
             }
 
-            var currentPrice = GetCurrentReferencePrice();
-            if (double.IsNaN(currentPrice) || double.IsInfinity(currentPrice) || Math.Abs(currentPrice) < double.Epsilon)
+            if (_showConfirmationDots)
             {
-                return;
+                DrawConfirmedLevelDots(visual);
             }
-
-            DrawDistancePercentLabels(visual, currentPrice, true);
-            DrawDistancePercentLabels(visual, currentPrice, false);
         }
 
         private TrendsCalculationEngine.TrendSelectionResult GetOrComputeTrendSelection(
@@ -1165,6 +1418,164 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
+        private void EnsureConfirmedLevelPoints()
+        {
+            if (_confirmedLevelPoints == null)
+            {
+                _confirmedLevelPoints = new List<ConfirmedLevelPoint>();
+            }
+        }
+
+        private void DetectConfirmedLevels(
+            List<TrendsCalculationEngine.LevelLine> levels, bool isHigh)
+        {
+            if (levels.Count == 0 || Helper.Count == 0)
+            {
+                return;
+            }
+
+            double[] high, low, close;
+            int[] barToAgg = null;
+            List<TrendsCalculationEngine.TimeFrameBar> aggBars = null;
+
+            if (_confirmationTimeframeMinutes > 0 && DataProvider != null && DataProvider.Period != null)
+            {
+                var settings = new AkodeTrendsProfileSettings
+                {
+                    PeriodType = _confirmationTimeframeMinutes >= 60
+                        ? AkodeLevelsPeriodType.Hour
+                        : AkodeLevelsPeriodType.Minute,
+                    PeriodValue = _confirmationTimeframeMinutes >= 60
+                        ? _confirmationTimeframeMinutes / 60
+                        : _confirmationTimeframeMinutes
+                };
+
+                aggBars = TrendsCalculationEngine.BuildOnTimeframe(
+                    Helper.Date, Helper.High, Helper.Low, DataProvider, settings);
+
+                if (aggBars.Count < 2)
+                {
+                    return;
+                }
+
+                // Build aggregated arrays
+                high = new double[aggBars.Count];
+                low = new double[aggBars.Count];
+                close = new double[aggBars.Count];
+                for (int i = 0; i < aggBars.Count; i++)
+                {
+                    high[i] = aggBars[i].High;
+                    low[i] = aggBars[i].Low;
+                    // Close = last candle's close in this timeframe bar
+                    var lastOrigIdx = i + 1 < aggBars.Count
+                        ? aggBars[i + 1].FirstIndex - 1
+                        : Helper.Count - 1;
+                    close[i] = Helper.Close[lastOrigIdx];
+                }
+
+                // Map original bar index → aggregated bar index
+                barToAgg = new int[Helper.Count];
+                for (int a = 0; a < aggBars.Count; a++)
+                {
+                    var end = a + 1 < aggBars.Count ? aggBars[a + 1].FirstIndex : Helper.Count;
+                    for (int j = aggBars[a].FirstIndex; j < end; j++)
+                    {
+                        barToAgg[j] = a;
+                    }
+                }
+            }
+            else
+            {
+                high = Helper.High;
+                low = Helper.Low;
+                close = Helper.Close;
+            }
+
+            foreach (var level in levels)
+            {
+                if (level.IsBroken)
+                {
+                    continue;
+                }
+
+                var startIdx = barToAgg != null ? barToAgg[level.StartIndex] : level.StartIndex;
+
+                var retestBar = TrendsCalculationEngine.FindClosestRetest(
+                    startIdx, level.Price, isHigh,
+                    _confirmationTolerancePercent, _confirmationMinBars,
+                    high, low, close);
+
+                if (retestBar < 0)
+                {
+                    continue;
+                }
+
+                // Map aggregated index back to original
+                var originalRetest = aggBars != null
+                    ? (isHigh ? aggBars[retestBar].HighIndex : aggBars[retestBar].LowIndex)
+                    : retestBar;
+
+                _confirmedLevelPoints.Add(new ConfirmedLevelPoint
+                {
+                    Price = level.Price,
+                    Point1Index = level.StartIndex,
+                    Point2Index = originalRetest,
+                    IsHigh = isHigh,
+                    Color = _confirmationDotColor
+                });
+            }
+        }
+
+        private void DrawConfirmedLevelDots(DxVisualQueue visual)
+        {
+            EnsureConfirmedLevelPoints();
+
+            if (_confirmedLevelPoints.Count == 0)
+            {
+                return;
+            }
+
+            var chartRect = Canvas.Rect;
+            var radius = _confirmationDotSize / 2.0;
+            var numberFont = new XFont(Canvas.ChartFont.Name, _confirmationDotSize + 2.0);
+            var numberOffset = radius + 2.0;
+
+            for (int i = 0; i < _confirmedLevelPoints.Count; i++)
+            {
+                var cp = _confirmedLevelPoints[i];
+                var y = GetY(cp.Price);
+
+                if (y < chartRect.Top - radius - 20 || y > chartRect.Bottom + radius + 20)
+                {
+                    continue;
+                }
+
+                var brush = new XBrush(cp.Color);
+
+                // Point 1
+                var x1 = Canvas.GetX(cp.Point1Index);
+                if (x1 >= chartRect.Left - radius && x1 <= chartRect.Right + radius)
+                {
+                    visual.FillEllipse(brush, new Point(x1, y), radius, radius);
+                    var numSize1 = numberFont.GetSize("1");
+                    var numY1 = cp.IsHigh ? y - numberOffset - numSize1.Height : y + numberOffset;
+                    visual.DrawString("1", numberFont, brush,
+                        new Rect(x1 - numSize1.Width / 2.0, numY1, numSize1.Width, numSize1.Height));
+                }
+
+                // Point 2
+                var x2 = Canvas.GetX(cp.Point2Index);
+                if (x2 >= chartRect.Left - radius && x2 <= chartRect.Right + radius)
+                {
+                    visual.FillEllipse(brush, new Point(x2, y), radius, radius);
+                    var numSize2 = numberFont.GetSize("2");
+                    var numY2 = cp.IsHigh ? y - numberOffset - numSize2.Height : y + numberOffset;
+                    visual.DrawString("2", numberFont, brush,
+                        new Rect(x2 - numSize2.Width / 2.0, numY2, numSize2.Width, numSize2.Height));
+                }
+            }
+        }
+
         private void HandleNestedSettingsChanged(object sender, PropertyChangedEventArgs e)
         {
             OnPropertyChanged(string.Empty);
@@ -1344,20 +1755,41 @@ namespace Akode.TigerTrade.Indicators
                 return cmp != 0 ? cmp : b.Level.StartIndex.CompareTo(a.Level.StartIndex);
             });
 
-            var font = Canvas.ChartFont;
+            var baseFontName = Canvas.ChartFont.Name;
+            var font = new XFont(baseFontName, _distanceLabelFontSize, _distanceLabelBold);
+            var gapFont = new XFont(baseFontName, _gapLabelFontSize, _gapLabelBold);
             var acceptedRects = new List<Rect>(MaxDistancePercentLabelsPerSide);
             var chartRect = Canvas.Rect;
             var acceptedCount = 0;
 
             for (int i = 0; i < candidates.Count && acceptedCount < MaxDistancePercentLabelsPerSide; i++)
             {
-                var text = FormatDistancePercent(candidates[i].Level.Price, currentPrice);
+                var text = FormatDistancePercent(candidates[i].Level.Price, currentPrice, _distancePercentDecimals);
                 if (string.IsNullOrEmpty(text))
                 {
                     continue;
                 }
 
-                var size = font.GetSize(text);
+                string gapText = null;
+                if (i + 1 < candidates.Count)
+                {
+                    var gap = Math.Abs(candidates[i + 1].Level.Price - candidates[i].Level.Price);
+                    var gapPercent = (gap / currentPrice) * 100.0;
+                    if (!double.IsNaN(gapPercent) && !double.IsInfinity(gapPercent))
+                    {
+                        var triangle = highSide ? "\u25B2" : "\u25BC";
+                        var fmt = "0." + new string('0', _distancePercentDecimals);
+                        gapText = triangle + gapPercent.ToString(fmt) + "%";
+                    }
+                }
+
+                var mainSize = font.GetSize(text);
+                var gapSize = gapText != null ? gapFont.GetSize(gapText) : new Size(0, 0);
+                var gapSpacing = gapText != null ? DistancePercentLabelPadding : 0.0;
+                var totalWidth = mainSize.Width + gapSpacing + gapSize.Width;
+                var totalHeight = Math.Max(mainSize.Height, gapSize.Height);
+                var size = new Size(totalWidth, totalHeight);
+
                 var lineY = GetY(candidates[i].Level.Price);
                 var x = chartRect.Right - size.Width - DistancePercentLabelPadding;
                 var y = lineY - size.Height - DistancePercentLabelLineGap;
@@ -1404,11 +1836,18 @@ namespace Akode.TigerTrade.Indicators
                 }
 
                 acceptedRects.Add(labelRect);
-                visual.DrawString(
-                    text,
-                    font,
-                    new XBrush(candidates[i].Level.Color),
-                    labelRect);
+                var brush = new XBrush(candidates[i].Level.Color);
+                var mainRect = new Rect(x, y, mainSize.Width, mainSize.Height);
+                visual.DrawString(text, font, brush, mainRect);
+
+                if (gapText != null)
+                {
+                    var gapX = x + mainSize.Width + gapSpacing;
+                    var gapY = y + (mainSize.Height - gapSize.Height);
+                    var gapRect = new Rect(gapX, gapY, gapSize.Width, gapSize.Height);
+                    visual.DrawString(gapText, gapFont, brush, gapRect);
+                }
+
                 acceptedCount++;
             }
         }
@@ -1452,7 +1891,7 @@ namespace Akode.TigerTrade.Indicators
             return y >= rect.Top && y <= rect.Bottom;
         }
 
-        private static string FormatDistancePercent(double levelPrice, double currentPrice)
+        private static string FormatDistancePercent(double levelPrice, double currentPrice, int decimals)
         {
             var percent = ((levelPrice - currentPrice) / currentPrice) * 100.0;
             if (double.IsNaN(percent) || double.IsInfinity(percent))
@@ -1460,7 +1899,10 @@ namespace Akode.TigerTrade.Indicators
                 return null;
             }
 
-            return percent.ToString("+0.00;-0.00;0.00") + "%";
+            var fmt = "0." + new string('0', decimals);
+            var posFmt = "+" + fmt;
+            var negFmt = "-" + fmt;
+            return percent.ToString(posFmt + ";" + negFmt + ";" + fmt) + "%";
         }
 
         private static AkodeTrendlineAlgorithm NormalizeTrendlineAlgorithm(AkodeTrendlineAlgorithm value)
