@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-04-09
+
+### Added
+
+- Confirmation dots for retested levels — draws dots at the original pivot (point 1) and the closest retest (point 2) on horizontal support/resistance levels. Configurable tolerance (%), min bars between touches, dot size, dot color, and dedicated timeframe (minutes).
+- Gap-to-next-level indicator on distance labels with solid triangles (▲ for resistance, ▼ for support).
+- Configurable font size and bold for both distance and gap labels.
+- Configurable decimal precision for distance % labels.
+
+### Fixed
+
+- Confirmation dot algorithm now picks the globally closest retest bar instead of first-in-zone.
+- Confirmation dots stay stable when switching chart to lower timeframes via dedicated timeframe setting.
+
 ## [1.6.0] - 2026-03-21
 
 ### Added
