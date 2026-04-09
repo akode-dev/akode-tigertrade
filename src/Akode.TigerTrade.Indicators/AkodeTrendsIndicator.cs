@@ -94,9 +94,9 @@ namespace Akode.TigerTrade.Indicators
         private ChartLine _testedLowSeries;
         private List<VisibleHorizontalLevel> _visibleHorizontalLevels;
         private bool _showConfirmationDots;
-        private double _confirmationTolerancePercent = 0.5;
+        private int _confirmationToleranceTenths = 5;
         private int _confirmationMinBars = 10;
-        private double _confirmationDotSize = 6.0;
+        private int _confirmationDotSize = 6;
         private XColor _confirmationDotColor = XColor.FromArgb(255, 0, 191, 255);
         private List<ConfirmedLevelPoint> _confirmedLevelPoints;
         private int _confirmationTimeframeMinutes;
@@ -558,21 +558,21 @@ namespace Akode.TigerTrade.Indicators
             }
         }
 
-        [DataMember(Name = "ConfirmationTolerancePercent")]
-        [Category("Confirmation dots"), DisplayName("Tolerance (%)")]
-        public double ConfirmationTolerancePercent
+        [DataMember(Name = "ConfirmationToleranceTenths")]
+        [Category("Confirmation dots"), DisplayName("Tolerance (x0.1%)")]
+        public int ConfirmationToleranceTenths
         {
-            get { return _confirmationTolerancePercent; }
+            get { return _confirmationToleranceTenths; }
             set
             {
-                value = Math.Max(0.01, value);
+                value = Math.Max(1, value);
 
-                if (Math.Abs(value - _confirmationTolerancePercent) < double.Epsilon)
+                if (value == _confirmationToleranceTenths)
                 {
                     return;
                 }
 
-                _confirmationTolerancePercent = value;
+                _confirmationToleranceTenths = value;
                 OnPropertyChanged();
             }
         }
@@ -617,14 +617,14 @@ namespace Akode.TigerTrade.Indicators
 
         [DataMember(Name = "ConfirmationDotSize")]
         [Category("Confirmation dots"), DisplayName("Dot size")]
-        public double ConfirmationDotSize
+        public int ConfirmationDotSize
         {
             get { return _confirmationDotSize; }
             set
             {
-                value = Math.Max(1.0, Math.Min(20.0, value));
+                value = Math.Max(1, Math.Min(20, value));
 
-                if (Math.Abs(value - _confirmationDotSize) < double.Epsilon)
+                if (value == _confirmationDotSize)
                 {
                     return;
                 }
@@ -1149,7 +1149,7 @@ namespace Akode.TigerTrade.Indicators
             TestedLowSeries.CopyTheme(source.TestedLowSeries);
 
             ShowConfirmationDots = source.ShowConfirmationDots;
-            ConfirmationTolerancePercent = source.ConfirmationTolerancePercent;
+            ConfirmationToleranceTenths = source.ConfirmationToleranceTenths;
             ConfirmationMinBars = source.ConfirmationMinBars;
             ConfirmationTimeframeMinutes = source.ConfirmationTimeframeMinutes;
             ConfirmationDotSize = source.ConfirmationDotSize;
@@ -1543,7 +1543,7 @@ namespace Akode.TigerTrade.Indicators
 
                 var retestBar = TrendsCalculationEngine.FindClosestRetest(
                     startIdx, level.Price, isHigh,
-                    _confirmationTolerancePercent, _confirmationMinBars,
+                    _confirmationToleranceTenths / 10.0, _confirmationMinBars,
                     high, low, close);
 
                 if (retestBar < 0)
